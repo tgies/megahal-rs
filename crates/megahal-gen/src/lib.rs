@@ -163,15 +163,13 @@ where
     let mut ctx = model.backward_context();
 
     // Re-establish backward context from the beginning of the reply.
-    let walk_len = reply.len().min(model.order as usize);
-    if reply.len() > 1 {
-        for i in (0..walk_len).rev() {
+    // Spec 7.2.3: walk from index min(reply_length-1, order) down to 0.
+    // This matches the C code: for(i=MIN(size-1,order); i>=0; i--)
+    if !reply.is_empty() {
+        let start = (reply.len() - 1).min(model.order as usize);
+        for i in (0..=start).rev() {
             ctx.advance(&model.backward, reply[i]);
         }
-    } else if !reply.is_empty() {
-        // Single token: just advance with it.
-        // Actually for min(reply.len()-1, order), if reply has 1 token, walk_len=0.
-        // This matches the spec: min(reply_length - 1, order).
     }
 
     loop {

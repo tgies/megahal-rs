@@ -181,7 +181,12 @@ impl<R: Rng> MegaHal<R> {
         self.model.learn(&tokens);
 
         // Step 3: Extract keywords.
-        let keywords = extract_keywords(&tokens, &self.model.dictionary, &self.keyword_config);
+        let keywords = extract_keywords(
+            &tokens,
+            &self.model.dictionary,
+            &self.keyword_config,
+            MegaHalSymbol::new,
+        );
         let keyword_symbols: HashSet<MegaHalSymbol> =
             keywords.iter().map(|s| MegaHalSymbol::new(s)).collect();
 

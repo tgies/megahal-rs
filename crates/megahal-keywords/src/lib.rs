@@ -60,12 +60,18 @@ pub struct KeywordConfig {
 /// `S` must implement `AsRef<[u8]>` so we can check if the first character is
 /// alphanumeric (a requirement of the extraction rules).
 ///
+/// `make_symbol` constructs a Symbol from a string for dictionary lookup. This
+/// is needed because after swap substitution, candidates are Strings, but the
+/// dictionary is keyed on `S`. The caller (which knows the concrete Symbol type)
+/// provides this factory.
+///
 /// Returns the keyword set as uppercase `String` values (matching the model's
 /// internal representation).
 pub fn extract_keywords<S: Symbol + AsRef<[u8]>>(
     tokens: &[S],
     dict: &SymbolDict<S>,
     config: &KeywordConfig,
+    make_symbol: impl Fn(&str) -> S,
 ) -> HashSet<String> {
     let mut keywords = HashSet::new();
 
@@ -81,7 +87,7 @@ pub fn extract_keywords<S: Symbol + AsRef<[u8]>>(
     // Pass 1: Primary keywords.
     for candidate_group in &candidates {
         for candidate in candidate_group {
-            if !is_keyword_eligible(candidate, dict, config, false) {
+            if !is_keyword_eligible(candidate, dict, config, false, &make_symbol) {
                 continue;
             }
             keywords.insert(candidate.clone());
@@ -92,7 +98,7 @@ pub fn extract_keywords<S: Symbol + AsRef<[u8]>>(
     if !keywords.is_empty() {
         for candidate_group in &candidates {
             for candidate in candidate_group {
-                if !is_keyword_eligible(candidate, dict, config, true) {
+                if !is_keyword_eligible(candidate, dict, config, true, &make_symbol) {
                     continue;
                 }
                 keywords.insert(candidate.clone());
@@ -105,13 +111,16 @@ pub fn extract_keywords<S: Symbol + AsRef<[u8]>>(
 
 /// Check if a candidate word is eligible as a keyword.
 ///
-/// In primary mode (`aux_pass = false`): skip if banned OR auxiliary.
-/// In auxiliary mode (`aux_pass = true`): skip if NOT in auxiliary list.
+/// In primary mode (`aux_pass = false`): must be in dict, start alphanumeric,
+/// not banned, not auxiliary.
+/// In auxiliary mode (`aux_pass = true`): must be in dict, start alphanumeric,
+/// and IS in auxiliary list.
 fn is_keyword_eligible<S: Symbol + AsRef<[u8]>>(
     candidate: &str,
-    _dict: &SymbolDict<S>,
+    dict: &SymbolDict<S>,
     config: &KeywordConfig,
     aux_pass: bool,
+    make_symbol: &impl Fn(&str) -> S,
 ) -> bool {
     // Must start with an alphanumeric character.
     let first_byte = candidate.as_bytes().first().copied();
@@ -119,13 +128,12 @@ fn is_keyword_eligible<S: Symbol + AsRef<[u8]>>(
         return false;
     }
 
-    // Must exist in the model dictionary.
-    // We need to construct a Symbol from the candidate string to look it up.
-    // This is a limitation — the caller needs to ensure the dictionary's Symbol
-    // type can be compared with this string. For now, we use find_by_str which
-    // requires the dict to support string-based lookup.
-    // TODO: This needs a cleaner abstraction. For now, we check membership
-    // by scanning the banned/aux sets which are String-based.
+    // Must exist in the model dictionary (the model has seen this word).
+    let sym = make_symbol(candidate);
+    if dict.find(&sym).is_none() {
+        return false;
+    }
+
     let upper = candidate.to_uppercase();
 
     if aux_pass {
