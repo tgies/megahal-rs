@@ -10,6 +10,7 @@
 //! search. Counts saturate at `u16::MAX` (65535) — once reached, neither the
 //! node's count nor its parent's usage are incremented further.
 
+use serde::{Deserialize, Serialize};
 use symbol_core::SymbolId;
 
 /// Opaque handle into the trie's node arena.
@@ -17,7 +18,7 @@ use symbol_core::SymbolId;
 /// This is a plain index — it does not borrow the trie. You can hold arbitrarily
 /// many `NodeRef` values while mutating the trie, which is essential for the
 /// context window pattern used during learning.
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
 pub struct NodeRef(u32);
 
 impl NodeRef {
@@ -44,7 +45,7 @@ impl NodeRef {
 ///
 /// Fields are public to allow direct access for probability computation:
 /// `P(child|parent) = child.count / parent.usage`
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TrieNode {
     /// The symbol ID this node represents.
     pub symbol: SymbolId,
@@ -92,7 +93,7 @@ impl TrieNode {
 /// assert_eq!(same_child, child);
 /// assert_eq!(trie.node(child).count, 2);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Trie {
     nodes: Vec<TrieNode>,
 }
@@ -320,6 +321,28 @@ mod tests {
         let found = trie.find_child(found, SymbolId(3)).unwrap();
         let found = trie.find_child(found, SymbolId(4)).unwrap();
         assert_eq!(found, level3);
+    }
+
+    #[test]
+    fn trie_serde_roundtrip() {
+        let mut trie = Trie::new();
+        let root = trie.root();
+        trie.add_child(root, SymbolId(2));
+        trie.add_child(root, SymbolId(5));
+        trie.add_child(root, SymbolId(2)); // increment count
+
+        let json = serde_json::to_string(&trie).unwrap();
+        let back: Trie = serde_json::from_str(&json).unwrap();
+
+        let back_root = back.root();
+        assert_eq!(back.branch_count(back_root), 2);
+        assert_eq!(back.node(back_root).usage, 3);
+
+        let child2 = back.find_child(back_root, SymbolId(2)).unwrap();
+        assert_eq!(back.node(child2).count, 2);
+
+        let child5 = back.find_child(back_root, SymbolId(5)).unwrap();
+        assert_eq!(back.node(child5).count, 1);
     }
 
     #[test]

@@ -26,6 +26,10 @@ struct Args {
     #[arg(long)]
     train: Option<PathBuf>,
 
+    /// Brain file path. Loaded at startup (if exists), saved on exit.
+    #[arg(long)]
+    brain: Option<PathBuf>,
+
     /// Directory containing support files (megahal.ban, .aux, .grt, .swp).
     #[arg(long)]
     data_dir: Option<PathBuf>,
@@ -83,6 +87,15 @@ fn main() -> io::Result<()> {
         hal.set_keyword_config(config);
     }
 
+    // Load brain if specified and file exists.
+    if let Some(ref path) = args.brain
+        && path.exists()
+    {
+        eprintln!("Loading brain from {}...", path.display());
+        hal.load_brain(path)?;
+        eprintln!("Brain loaded.");
+    }
+
     // Train from file if specified.
     if let Some(ref path) = args.train {
         eprintln!("Training from {}...", path.display());
@@ -113,6 +126,13 @@ fn main() -> io::Result<()> {
         let reply = hal.respond(trimmed);
         writeln!(stdout, "MegaHAL: {reply}")?;
         stdout.flush()?;
+    }
+
+    // Save brain on exit if path specified.
+    if let Some(ref path) = args.brain {
+        eprintln!("Saving brain to {}...", path.display());
+        hal.save_brain(path)?;
+        eprintln!("Brain saved.");
     }
 
     Ok(())

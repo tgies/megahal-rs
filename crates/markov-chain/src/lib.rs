@@ -9,6 +9,7 @@
 //! n-gram modeling task — not just chatbots.
 
 use ngram_trie::{NodeRef, Trie};
+use serde::{Deserialize, Serialize};
 use symbol_core::{Symbol, SymbolId, FIN_ID};
 use symbol_dict::SymbolDict;
 
@@ -105,7 +106,7 @@ impl ContextWindow {
 /// and backward (right-to-left). This enables bidirectional reply generation where
 /// a seed word can be expanded both forward to the end of a sentence and backward
 /// to the beginning.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BidirectionalModel<S: Symbol> {
     /// Model order (trie depth). Default: 5.
     pub order: u8,
@@ -185,7 +186,9 @@ impl<S: Symbol> BidirectionalModel<S> {
 mod tests {
     use super::*;
 
-    #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
     struct TestSym(String);
 
     impl Symbol for TestSym {
@@ -293,6 +296,29 @@ mod tests {
         assert_eq!(bwd.at_depth(0), Some(model.backward.root()));
         assert_eq!(fwd.order(), 5);
         assert_eq!(bwd.order(), 5);
+    }
+
+    #[test]
+    fn model_serde_roundtrip() {
+        let mut model = BidirectionalModel::<TestSym>::new(2);
+        model.learn(&make_tokens(&["A", "B", "C"]));
+        model.learn(&make_tokens(&["X", "Y", "Z"]));
+
+        let json = serde_json::to_string(&model).unwrap();
+        let back: BidirectionalModel<TestSym> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(back.order, 2);
+        assert_eq!(back.dictionary.len(), model.dictionary.len());
+        assert!(back.dictionary.find(&TestSym("A".into())).is_some());
+        assert!(back.dictionary.find(&TestSym("Z".into())).is_some());
+
+        let root = back.forward.root();
+        let id_a = back.dictionary.find(&TestSym("A".into())).unwrap();
+        assert!(back.forward.find_child(root, id_a).is_some());
+
+        let broot = back.backward.root();
+        let id_c = back.dictionary.find(&TestSym("C".into())).unwrap();
+        assert!(back.backward.find_child(broot, id_c).is_some());
     }
 
     #[test]

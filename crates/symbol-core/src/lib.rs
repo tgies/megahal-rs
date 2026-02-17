@@ -7,6 +7,8 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
+use serde::{Deserialize, Serialize};
+
 /// A symbol that can be stored in an n-gram trie or interning dictionary.
 ///
 /// This trait is intentionally minimal — no string assumptions, no character
@@ -28,7 +30,7 @@ pub trait Symbol: Clone + Eq + Ord + Hash + Debug + Send + Sync {
 /// Uses `u16` storage, supporting up to 65,534 unique symbols (IDs 0 and 1
 /// are reserved for sentinels). This matches the original MegaHAL limit but
 /// is useful for any system needing compact symbol interning.
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct SymbolId(pub u16);
 
 impl SymbolId {
@@ -110,5 +112,13 @@ mod tests {
     fn symbol_id_ordering() {
         assert!(SymbolId(0) < SymbolId(1));
         assert!(SymbolId(1) < SymbolId(65535));
+    }
+
+    #[test]
+    fn symbol_id_serde_roundtrip() {
+        let id = SymbolId(42);
+        let json = serde_json::to_string(&id).unwrap();
+        let back: SymbolId = serde_json::from_str(&json).unwrap();
+        assert_eq!(id, back);
     }
 }

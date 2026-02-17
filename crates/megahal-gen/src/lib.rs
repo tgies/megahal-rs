@@ -223,10 +223,10 @@ where
             let kw = keyword_vec[idx];
 
             // Must exist in dictionary and not be auxiliary.
-            if let Some(id) = model.dictionary.find(kw) {
-                if !aux_set.contains(kw) {
-                    return id;
-                }
+            if let Some(id) = model.dictionary.find(kw)
+                && !aux_set.contains(kw)
+            {
+                return id;
             }
         }
     }
@@ -239,6 +239,7 @@ where
 /// Keyword-biased random symbol selection (the "babble" function).
 ///
 /// MEGAHAL_SPEC.md Section 7.3.
+#[allow(clippy::too_many_arguments)]
 fn babble<S, R>(
     trie: &Trie,
     ctx: &ContextWindow,
@@ -327,18 +328,15 @@ where
             let mut ctx_count: usize = 0;
 
             for j in 0..model.order as usize {
-                if let Some(parent_ref) = ctx.at_depth(j) {
-                    if let Some(child_ref) = model.forward.find_child(parent_ref, sym_id) {
-                        let child = model.forward.node(child_ref);
-                        let parent = model.forward.node(parent_ref);
-                        if parent.usage > 0 {
-                            prob += child.count as f64 / parent.usage as f64;
-                            ctx_count += 1;
-                        }
+                if let Some(parent_ref) = ctx.at_depth(j)
+                    && let Some(child_ref) = model.forward.find_child(parent_ref, sym_id)
+                {
+                    let child = model.forward.node(child_ref);
+                    let parent = model.forward.node(parent_ref);
+                    if parent.usage > 0 {
+                        prob += child.count as f64 / parent.usage as f64;
+                        ctx_count += 1;
                     }
-                    // Note: original code doesn't guard against find_symbol returning NULL.
-                    // We guard here by using Option — if the child isn't found, we skip
-                    // that context depth. This is the safe behavior.
                 }
             }
 
@@ -364,14 +362,14 @@ where
             let mut ctx_count: usize = 0;
 
             for j in 0..model.order as usize {
-                if let Some(parent_ref) = ctx.at_depth(j) {
-                    if let Some(child_ref) = model.backward.find_child(parent_ref, sym_id) {
-                        let child = model.backward.node(child_ref);
-                        let parent = model.backward.node(parent_ref);
-                        if parent.usage > 0 {
-                            prob += child.count as f64 / parent.usage as f64;
-                            ctx_count += 1;
-                        }
+                if let Some(parent_ref) = ctx.at_depth(j)
+                    && let Some(child_ref) = model.backward.find_child(parent_ref, sym_id)
+                {
+                    let child = model.backward.node(child_ref);
+                    let parent = model.backward.node(parent_ref);
+                    if parent.usage > 0 {
+                        prob += child.count as f64 / parent.usage as f64;
+                        ctx_count += 1;
                     }
                 }
             }
@@ -428,7 +426,7 @@ pub fn capitalize(tokens: &[String]) -> String {
         }
     }
 
-    String::from_utf8(result).unwrap_or_else(|_| raw)
+    String::from_utf8(result).unwrap_or(raw)
 }
 
 /// Check if two token sequences are equal (case-insensitive, for dissimilarity test).

@@ -27,7 +27,7 @@ megahal-gen = { path = "crates/megahal-gen" }
 megahal = { path = "crates/megahal" }
 rand = "0.9"
 serde = { version = "1", features = ["derive"] }
-bincode = "2"
+bincode = { version = "2", features = ["serde"] }
 
 [package]
 name = "megahal-cli"

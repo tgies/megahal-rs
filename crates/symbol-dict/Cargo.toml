@@ -7,3 +7,7 @@ description = "Generic interning dictionary mapping Symbol values to compact Sym
 
 [dependencies]
 symbol-core.workspace = true
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1"

@@ -10,6 +10,7 @@
 //!
 //! Sentinel entries `ERROR_ID` (0) and `FIN_ID` (1) are pre-populated at construction.
 
+use serde::{Deserialize, Serialize};
 use symbol_core::{Symbol, SymbolId, ERROR_ID, FIN_ID};
 
 /// An interning dictionary that maps symbols to compact [`SymbolId`] values.
@@ -20,7 +21,7 @@ use symbol_core::{Symbol, SymbolId, ERROR_ID, FIN_ID};
 /// Lookup is O(log n) via binary search over a sorted index.
 /// Insertion is O(n) in the worst case (due to index shifting), but amortized
 /// O(log n) for the search component.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SymbolDict<S: Symbol> {
     /// Symbols in insertion order. `entries[id.as_usize()]` returns the symbol for `id`.
     entries: Vec<S>,
@@ -119,8 +120,10 @@ impl<S: Symbol> Default for SymbolDict<S> {
 mod tests {
     use super::*;
 
+    use serde::{Deserialize, Serialize};
+
     /// A simple Symbol for testing: case-insensitive ASCII string.
-    #[derive(Clone, Eq, PartialEq, Hash, Debug)]
+    #[derive(Clone, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
     struct TestSym(String);
 
     impl PartialOrd for TestSym {
@@ -203,6 +206,22 @@ mod tests {
 
         // Our TestSym compares case-insensitively.
         assert_eq!(dict.find(&TestSym("HELLO".into())), Some(id));
+    }
+
+    #[test]
+    fn dict_serde_roundtrip() {
+        let mut dict = SymbolDict::<TestSym>::new();
+        dict.intern(TestSym("HELLO".into()));
+        dict.intern(TestSym("WORLD".into()));
+        dict.intern(TestSym("APPLE".into()));
+
+        let json = serde_json::to_string(&dict).unwrap();
+        let back: SymbolDict<TestSym> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(back.len(), dict.len());
+        assert!(back.find(&TestSym("HELLO".into())).is_some());
+        assert!(back.find(&TestSym("WORLD".into())).is_some());
+        assert!(back.find(&TestSym("APPLE".into())).is_some());
     }
 
     #[test]

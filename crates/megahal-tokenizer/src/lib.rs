@@ -75,15 +75,19 @@ fn is_boundary(input: &[u8], pos: usize) -> bool {
     let prev = input[pos - 1];
 
     // Apostrophe rule: keep contractions together.
-    if curr == b'\'' && pos + 1 < input.len() {
-        if prev.is_ascii_alphabetic() && input[pos + 1].is_ascii_alphabetic() {
-            return false;
-        }
+    if curr == b'\''
+        && pos + 1 < input.len()
+        && prev.is_ascii_alphabetic()
+        && input[pos + 1].is_ascii_alphabetic()
+    {
+        return false;
     }
-    if prev == b'\'' && pos >= 2 {
-        if input[pos - 2].is_ascii_alphabetic() && curr.is_ascii_alphabetic() {
-            return false;
-        }
+    if prev == b'\''
+        && pos >= 2
+        && input[pos - 2].is_ascii_alphabetic()
+        && curr.is_ascii_alphabetic()
+    {
+        return false;
     }
 
     // Alpha transition: exactly one is alphabetic.

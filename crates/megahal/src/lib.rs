@@ -31,6 +31,7 @@ use markov_chain::BidirectionalModel;
 use megahal_gen::{capitalize, generate_reply};
 use megahal_tokenizer::tokenize;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use symbol_core::Symbol;
 
 // Re-export types that consumers (like the CLI) need.
@@ -42,7 +43,7 @@ pub use megahal_keywords::{KeywordConfig, SwapTable, extract_keywords};
 /// All comparisons are case-insensitive (both sides uppercased before comparison).
 /// Ordering is lexicographic after uppercasing, with shorter strings comparing as
 /// less-than if they share a prefix. This matches the original MegaHAL behavior.
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MegaHalSymbol(Vec<u8>);
 
 impl MegaHalSymbol {
@@ -64,6 +65,12 @@ impl MegaHalSymbol {
     /// Internal: uppercased bytes for comparison.
     fn upper(&self) -> Vec<u8> {
         self.0.iter().map(|b| b.to_ascii_uppercase()).collect()
+    }
+}
+
+impl std::hash::Hash for MegaHalSymbol {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.upper().hash(state);
     }
 }
 
@@ -102,6 +109,12 @@ impl Symbol for MegaHalSymbol {
         MegaHalSymbol(b"<FIN>".to_vec())
     }
 }
+
+/// Magic bytes at the start of a brain file.
+const BRAIN_MAGIC: &[u8; 8] = b"MHALRUST";
+
+/// Brain file format version.
+const BRAIN_VERSION: u8 = 1;
 
 /// The MegaHAL conversational engine.
 ///
@@ -258,6 +271,51 @@ impl<R: Rng> MegaHal<R> {
     /// Get a reference to the underlying model (for inspection/testing).
     pub fn model(&self) -> &BidirectionalModel<MegaHalSymbol> {
         &self.model
+    }
+
+    /// Save the model to a binary brain file.
+    ///
+    /// The file format is: 8-byte magic ("MHALRUST") + 1-byte version + bincode-encoded model.
+    /// Only the model (tries + dictionary) is saved — keyword config, greetings,
+    /// generation limits, and RNG state are not included.
+    pub fn save_brain(&self, path: &Path) -> io::Result<()> {
+        let mut data = Vec::new();
+        data.extend_from_slice(BRAIN_MAGIC);
+        data.push(BRAIN_VERSION);
+
+        let encoded = bincode::serde::encode_to_vec(&self.model, bincode::config::standard())
+            .map_err(|e| io::Error::other(e.to_string()))?;
+        data.extend_from_slice(&encoded);
+
+        fs::write(path, data)
+    }
+
+    /// Load a model from a binary brain file, replacing the current model.
+    ///
+    /// The model order is restored from the file. Keyword config, greetings,
+    /// generation limits, and RNG are unaffected.
+    pub fn load_brain(&mut self, path: &Path) -> io::Result<()> {
+        let data = fs::read(path)?;
+
+        if data.len() < 9 || &data[..8] != BRAIN_MAGIC {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "not a MegaHAL brain file",
+            ));
+        }
+        if data[8] != BRAIN_VERSION {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported brain version: {}", data[8]),
+            ));
+        }
+
+        let (model, _len) =
+            bincode::serde::decode_from_slice(&data[9..], bincode::config::standard())
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+        self.model = model;
+
+        Ok(())
     }
 }
 
@@ -529,6 +587,80 @@ mod tests {
         let mut hal = test_hal();
         hal.train_from_file(&path).unwrap();
         assert!(hal.model().dictionary.len() > 2);
+        fs::remove_file(&path).ok();
+    }
+
+    // --- Brain persistence tests ---
+
+    #[test]
+    fn save_load_brain_roundtrip() {
+        let mut hal = trained_hal();
+        let _ = hal.respond("Tell me about dogs.");
+
+        let dir = std::env::temp_dir();
+        let path = dir.join("megahal_test_brain.brn");
+        hal.save_brain(&path).unwrap();
+
+        // Create a fresh MegaHal and load the brain.
+        let mut hal2 = test_hal();
+        hal2.set_limit(GenerationLimit::Iterations(20));
+        hal2.load_brain(&path).unwrap();
+
+        // The loaded model should have learned data.
+        let reply = hal2.respond("Tell me about dogs.");
+        assert!(!reply.is_empty());
+        assert_ne!(reply, "I don't know enough to answer you yet!");
+
+        // Dictionary size should match.
+        assert_eq!(
+            hal.model().dictionary.len(),
+            hal2.model().dictionary.len()
+        );
+
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn load_brain_rejects_bad_magic() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("megahal_test_bad_magic.brn");
+        fs::write(&path, b"NOTABRAIN000000").unwrap();
+
+        let mut hal = test_hal();
+        let err = hal.load_brain(&path).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("not a MegaHAL brain file"));
+
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn load_brain_rejects_bad_version() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("megahal_test_bad_version.brn");
+        let mut data = Vec::new();
+        data.extend_from_slice(b"MHALRUST");
+        data.push(99);
+        fs::write(&path, &data).unwrap();
+
+        let mut hal = test_hal();
+        let err = hal.load_brain(&path).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("unsupported brain version"));
+
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn load_brain_rejects_truncated_file() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("megahal_test_truncated.brn");
+        fs::write(&path, b"MHAL").unwrap();
+
+        let mut hal = test_hal();
+        let err = hal.load_brain(&path).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+
         fs::remove_file(&path).ok();
     }
 
