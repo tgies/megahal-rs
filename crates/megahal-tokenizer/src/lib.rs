@@ -197,4 +197,18 @@ mod tests {
         let tokens = tokenize("Why?");
         assert_eq!(tokens, vec!["WHY", "?"]);
     }
+
+    #[test]
+    fn digit_to_punctuation_boundary() {
+        // Digit→non-alpha boundary exercises the digit transition path
+        // (not caught by alpha transition since neither side is alphabetic).
+        let tokens = tokenize("5,");
+        assert_eq!(tokens, vec!["5", "."]);
+    }
+
+    #[test]
+    fn whitespace_only_input() {
+        let tokens = tokenize("   ");
+        assert_eq!(tokens, vec!["."]);
+    }
 }

@@ -739,6 +739,46 @@ mod tests {
     }
 
     #[test]
+    fn generate_reply_with_timeout() {
+        let model = trained_model(
+            2,
+            &[
+                &["THE", " ", "CAT", " ", "SAT"],
+                &["THE", " ", "DOG", " ", "RAN"],
+                &["A", " ", "BIG", " ", "CAT"],
+            ],
+        );
+        let mut kws = HashSet::new();
+        kws.insert(ts("CAT"));
+        let aux = HashSet::new();
+        let limit = GenerationLimit::Timeout(Duration::from_millis(50));
+        let mut rng = make_rng(42);
+        let reply = generate_reply(&model, &[], &kws, &aux, &limit, &mut rng);
+        assert!(!reply.is_empty());
+    }
+
+    #[test]
+    fn generate_reply_with_both_limit() {
+        let model = trained_model(
+            2,
+            &[
+                &["THE", " ", "CAT", " ", "SAT"],
+                &["THE", " ", "DOG", " ", "RAN"],
+            ],
+        );
+        let mut kws = HashSet::new();
+        kws.insert(ts("CAT"));
+        let aux = HashSet::new();
+        let limit = GenerationLimit::Both {
+            timeout: Duration::from_millis(50),
+            max_iterations: 10,
+        };
+        let mut rng = make_rng(42);
+        let reply = generate_reply(&model, &[], &kws, &aux, &limit, &mut rng);
+        assert!(!reply.is_empty());
+    }
+
+    #[test]
     fn generate_reply_with_aux_keywords() {
         let model = trained_model(
             2,

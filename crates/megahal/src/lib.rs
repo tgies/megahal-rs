@@ -393,6 +393,12 @@ mod tests {
     }
 
     #[test]
+    fn megahal_symbol_as_bytes() {
+        let sym = MegaHalSymbol::new("Hello");
+        assert_eq!(sym.as_bytes(), b"HELLO");
+    }
+
+    #[test]
     fn megahal_symbol_ordering() {
         let apple = MegaHalSymbol::new("apple");
         let banana = MegaHalSymbol::new("BANANA");
@@ -513,6 +519,14 @@ mod tests {
     fn greet_with_empty_greetings_returns_hello() {
         let mut hal = test_hal();
         hal.set_greetings(vec![]);
+        assert_eq!(hal.greet(), "Hello!");
+    }
+
+    #[test]
+    fn greet_with_greetings_but_no_training() {
+        let mut hal = test_hal();
+        hal.set_greetings(vec!["HI".into()]);
+        // No training → generation fails → fallback to "Hello!".
         assert_eq!(hal.greet(), "Hello!");
     }
 

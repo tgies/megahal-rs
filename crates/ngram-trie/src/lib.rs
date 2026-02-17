@@ -346,6 +346,24 @@ mod tests {
     }
 
     #[test]
+    fn len_and_is_empty() {
+        let mut trie = Trie::new();
+        assert_eq!(trie.len(), 1); // just root
+        assert!(trie.is_empty());
+
+        trie.add_child(trie.root(), SymbolId(1));
+        assert_eq!(trie.len(), 2);
+        assert!(!trie.is_empty());
+    }
+
+    #[test]
+    fn default_creates_new_trie() {
+        let trie = Trie::default();
+        assert_eq!(trie.len(), 1);
+        assert!(trie.is_empty());
+    }
+
+    #[test]
     fn usage_tracks_multiple_children() {
         let mut trie = Trie::new();
         let root = trie.root();

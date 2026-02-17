@@ -224,6 +224,50 @@ mod tests {
         assert!(back.find(&TestSym("APPLE".into())).is_some());
     }
 
+    /// A Symbol where error() > fin() to exercise the else branch in new().
+    #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+    struct ReversedSentinelSym(u32);
+
+    impl Symbol for ReversedSentinelSym {
+        fn error() -> Self {
+            ReversedSentinelSym(u32::MAX) // error > fin
+        }
+        fn fin() -> Self {
+            ReversedSentinelSym(0)
+        }
+    }
+
+    #[test]
+    fn new_dict_error_greater_than_fin() {
+        let dict = SymbolDict::<ReversedSentinelSym>::new();
+        assert_eq!(dict.len(), 2);
+        // Both sentinels should be findable despite reversed ordering.
+        assert_eq!(dict.resolve(ERROR_ID), &ReversedSentinelSym::error());
+        assert_eq!(dict.resolve(FIN_ID), &ReversedSentinelSym::fin());
+        assert!(dict.find(&ReversedSentinelSym::error()).is_some());
+        assert!(dict.find(&ReversedSentinelSym::fin()).is_some());
+    }
+
+    #[test]
+    fn is_empty_on_new_dict() {
+        let dict = SymbolDict::<TestSym>::new();
+        assert!(dict.is_empty());
+    }
+
+    #[test]
+    fn is_empty_after_intern() {
+        let mut dict = SymbolDict::<TestSym>::new();
+        dict.intern(TestSym("WORD".into()));
+        assert!(!dict.is_empty());
+    }
+
+    #[test]
+    fn default_creates_empty_dict() {
+        let dict = SymbolDict::<TestSym>::default();
+        assert!(dict.is_empty());
+        assert_eq!(dict.len(), 2);
+    }
+
     #[test]
     fn sorted_index_maintained() {
         let mut dict = SymbolDict::<TestSym>::new();
