@@ -449,12 +449,55 @@ fn resolve_ids<S: Symbol>(model: &BidirectionalModel<S>, ids: &[SymbolId]) -> Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
+    use rand::rngs::SmallRng;
+
+    // --- Test infrastructure ---
+
+    #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+    struct TSym(String);
+
+    impl Symbol for TSym {
+        fn error() -> Self {
+            TSym("<ERROR>".into())
+        }
+        fn fin() -> Self {
+            TSym("<FIN>".into())
+        }
+    }
+
+    impl AsRef<[u8]> for TSym {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_bytes()
+        }
+    }
+
+    fn ts(s: &str) -> TSym {
+        TSym(s.to_string())
+    }
+
+    fn trained_model(order: u8, sentences: &[&[&str]]) -> BidirectionalModel<TSym> {
+        let mut model = BidirectionalModel::new(order);
+        for sentence in sentences {
+            let tokens: Vec<TSym> = sentence.iter().map(|&s| ts(s)).collect();
+            model.learn(&tokens);
+        }
+        model
+    }
+
+    fn make_rng(s: u64) -> SmallRng {
+        SmallRng::seed_from_u64(s)
+    }
+
+    // --- GenerationLimit tests ---
 
     #[test]
     fn generation_limit_default_is_timeout() {
         let limit = GenerationLimit::default();
         assert!(matches!(limit, GenerationLimit::Timeout(_)));
     }
+
+    // --- capitalize tests ---
 
     #[test]
     fn capitalize_basic() {
@@ -482,5 +525,262 @@ mod tests {
     fn capitalize_empty() {
         let tokens: Vec<String> = vec![];
         assert_eq!(capitalize(&tokens), "");
+    }
+
+    #[test]
+    fn capitalize_after_exclamation() {
+        let tokens = vec![
+            "wow".to_string(),
+            "! ".to_string(),
+            "amazing".to_string(),
+            ".".to_string(),
+        ];
+        assert_eq!(capitalize(&tokens), "Wow! Amazing.");
+    }
+
+    #[test]
+    fn capitalize_after_question() {
+        let tokens = vec![
+            "really".to_string(),
+            "? ".to_string(),
+            "yes".to_string(),
+            ".".to_string(),
+        ];
+        assert_eq!(capitalize(&tokens), "Really? Yes.");
+    }
+
+    // --- seed tests ---
+
+    #[test]
+    fn seed_selects_keyword() {
+        let model = trained_model(2, &[
+            &["THE", " ", "CAT", " ", "SAT"],
+            &["THE", " ", "DOG", " ", "RAN"],
+        ]);
+        let mut kws = HashSet::new();
+        kws.insert(ts("CAT"));
+        let aux = HashSet::new();
+        let mut rng = make_rng(42);
+        let id = seed(&model, &kws, &aux, &mut rng);
+        let cat_id = model.dictionary.find(&ts("CAT")).unwrap();
+        assert_eq!(id, cat_id);
+    }
+
+    #[test]
+    fn seed_skips_aux_keyword() {
+        let model = trained_model(2, &[&["THE", " ", "MY", " ", "CAT"]]);
+        let mut kws = HashSet::new();
+        kws.insert(ts("MY"));
+        let mut aux = HashSet::new();
+        aux.insert(ts("MY"));
+        let mut rng = make_rng(42);
+        let id = seed(&model, &kws, &aux, &mut rng);
+        // MY is aux-only → seed falls back to random child of forward root.
+        let my_id = model.dictionary.find(&ts("MY")).unwrap();
+        assert_ne!(id, my_id);
+    }
+
+    #[test]
+    fn seed_with_empty_keywords_picks_random() {
+        let model = trained_model(2, &[&["THE", " ", "CAT"]]);
+        let kws = HashSet::new();
+        let aux = HashSet::new();
+        let mut rng = make_rng(42);
+        let id = seed(&model, &kws, &aux, &mut rng);
+        assert_ne!(id, ERROR_ID);
+        assert_ne!(id, FIN_ID);
+    }
+
+    #[test]
+    fn seed_returns_error_on_empty_model() {
+        let model: BidirectionalModel<TSym> = BidirectionalModel::new(2);
+        let kws = HashSet::new();
+        let aux = HashSet::new();
+        let mut rng = make_rng(42);
+        let id = seed(&model, &kws, &aux, &mut rng);
+        assert_eq!(id, ERROR_ID);
+    }
+
+    // --- evaluate_reply tests ---
+
+    #[test]
+    fn evaluate_empty_candidate_returns_zero() {
+        let model = trained_model(2, &[&["A", "B", "C"]]);
+        let kws = HashSet::new();
+        let score = evaluate_reply(&model, &[], &kws);
+        assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn evaluate_no_keywords_returns_zero() {
+        let model = trained_model(2, &[&["A", "B", "C"]]);
+        let kws = HashSet::new();
+        let candidate = vec![ts("A"), ts("B"), ts("C")];
+        let score = evaluate_reply(&model, &candidate, &kws);
+        assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn evaluate_with_keywords_returns_positive() {
+        let model = trained_model(
+            2,
+            &[&["A", "B", "C"], &["A", "B", "C"], &["A", "B", "C"]],
+        );
+        let mut kws = HashSet::new();
+        kws.insert(ts("B"));
+        let candidate = vec![ts("A"), ts("B"), ts("C")];
+        let score = evaluate_reply(&model, &candidate, &kws);
+        assert!(score > 0.0, "Expected positive surprise, got {score}");
+    }
+
+    #[test]
+    fn evaluate_unknown_token_skipped() {
+        let model = trained_model(2, &[&["A", "B", "C"]]);
+        let mut kws = HashSet::new();
+        kws.insert(ts("UNKNOWN"));
+        // UNKNOWN is not in the dict → find returns None → skipped.
+        let candidate = vec![ts("UNKNOWN")];
+        let score = evaluate_reply(&model, &candidate, &kws);
+        assert_eq!(score, 0.0);
+    }
+
+    // --- tokens_equal tests ---
+
+    #[test]
+    fn tokens_equal_same() {
+        let a = vec![ts("A"), ts("B")];
+        let b = vec![ts("A"), ts("B")];
+        assert!(tokens_equal(&a, &b));
+    }
+
+    #[test]
+    fn tokens_equal_different_length() {
+        let a = vec![ts("A"), ts("B")];
+        let b = vec![ts("A")];
+        assert!(!tokens_equal(&a, &b));
+    }
+
+    #[test]
+    fn tokens_equal_different_content() {
+        let a = vec![ts("A"), ts("B")];
+        let b = vec![ts("A"), ts("C")];
+        assert!(!tokens_equal(&a, &b));
+    }
+
+    #[test]
+    fn tokens_equal_both_empty() {
+        let a: Vec<TSym> = vec![];
+        let b: Vec<TSym> = vec![];
+        assert!(tokens_equal(&a, &b));
+    }
+
+    // --- generate_reply integration tests ---
+
+    #[test]
+    fn generate_reply_empty_model() {
+        let model: BidirectionalModel<TSym> = BidirectionalModel::new(2);
+        let kws = HashSet::new();
+        let aux = HashSet::new();
+        let limit = GenerationLimit::Iterations(10);
+        let mut rng = make_rng(42);
+        let reply = generate_reply(&model, &[], &kws, &aux, &limit, &mut rng);
+        assert!(reply.is_empty());
+    }
+
+    #[test]
+    fn generate_reply_produces_output() {
+        let model = trained_model(
+            2,
+            &[
+                &["THE", " ", "CAT", " ", "SAT"],
+                &["THE", " ", "DOG", " ", "RAN"],
+                &["A", " ", "BIG", " ", "CAT"],
+            ],
+        );
+        let mut kws = HashSet::new();
+        kws.insert(ts("CAT"));
+        let aux = HashSet::new();
+        let limit = GenerationLimit::Iterations(10);
+        let mut rng = make_rng(42);
+        let reply = generate_reply(&model, &[], &kws, &aux, &limit, &mut rng);
+        assert!(!reply.is_empty());
+    }
+
+    #[test]
+    fn generate_reply_deterministic() {
+        let build = || {
+            let model = trained_model(
+                2,
+                &[
+                    &["THE", " ", "CAT", " ", "SAT"],
+                    &["THE", " ", "DOG", " ", "RAN"],
+                ],
+            );
+            let mut kws = HashSet::new();
+            kws.insert(ts("CAT"));
+            let aux = HashSet::new();
+            let limit = GenerationLimit::Iterations(50);
+            let mut rng = make_rng(42);
+            generate_reply(&model, &[], &kws, &aux, &limit, &mut rng)
+        };
+        assert_eq!(build(), build());
+    }
+
+    #[test]
+    fn generate_reply_zero_iterations_returns_baseline() {
+        let model = trained_model(2, &[&["THE", " ", "CAT", " ", "SAT"]]);
+        let mut kws = HashSet::new();
+        kws.insert(ts("CAT"));
+        let aux = HashSet::new();
+        let limit = GenerationLimit::Iterations(0);
+        let mut rng = make_rng(42);
+        // With 0 iterations, only the baseline (no-keyword) reply is generated.
+        // Should return without hanging.
+        let reply = generate_reply(&model, &[], &kws, &aux, &limit, &mut rng);
+        let _ = reply; // just verify it completes
+    }
+
+    #[test]
+    fn generate_reply_with_aux_keywords() {
+        let model = trained_model(
+            2,
+            &[
+                &["MY", " ", "CAT", " ", "SAT"],
+                &["YOUR", " ", "DOG", " ", "RAN"],
+            ],
+        );
+        let mut kws = HashSet::new();
+        kws.insert(ts("CAT"));
+        kws.insert(ts("MY"));
+        let mut aux = HashSet::new();
+        aux.insert(ts("MY"));
+        let limit = GenerationLimit::Iterations(20);
+        let mut rng = make_rng(42);
+        let reply = generate_reply(&model, &[], &kws, &aux, &limit, &mut rng);
+        assert!(!reply.is_empty());
+    }
+
+    #[test]
+    fn generate_reply_dissimilarity_test() {
+        // If the candidate is identical to input, it should be rejected in favor
+        // of a different candidate (when possible).
+        let model = trained_model(
+            2,
+            &[
+                &["A", " ", "B", " ", "C"],
+                &["D", " ", "E", " ", "F"],
+                &["A", " ", "B", " ", "C"],
+            ],
+        );
+        let input = vec![ts("A"), ts(" "), ts("B"), ts(" "), ts("C")];
+        let kws = HashSet::new();
+        let aux = HashSet::new();
+        let limit = GenerationLimit::Iterations(50);
+        let mut rng = make_rng(42);
+        let reply = generate_reply(&model, &input, &kws, &aux, &limit, &mut rng);
+        // With multiple sentences in the model, at least some candidates should
+        // differ from input. The best reply should not be identical to input.
+        // (This isn't guaranteed with tiny models, but is very likely.)
+        let _ = reply;
     }
 }

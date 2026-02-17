@@ -298,6 +298,19 @@ mod tests {
         MegaHal::new(5, SmallRng::seed_from_u64(42))
     }
 
+    fn trained_hal() -> MegaHal<SmallRng> {
+        let mut hal = test_hal();
+        for _ in 0..5 {
+            hal.learn("The quick brown fox jumps over the lazy dog.");
+            hal.learn("Dogs are wonderful animals that bring joy to people.");
+            hal.learn("Cats and dogs are popular pets around the world.");
+        }
+        hal.set_limit(GenerationLimit::Iterations(20));
+        hal
+    }
+
+    // --- MegaHalSymbol tests ---
+
     #[test]
     fn megahal_symbol_case_insensitive() {
         let a = MegaHalSymbol::new("Hello");
@@ -322,6 +335,30 @@ mod tests {
     }
 
     #[test]
+    fn megahal_symbol_ordering() {
+        let apple = MegaHalSymbol::new("apple");
+        let banana = MegaHalSymbol::new("BANANA");
+        assert!(apple < banana);
+    }
+
+    #[test]
+    fn megahal_symbol_hash_case_insensitive() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(MegaHalSymbol::new("Hello"));
+        assert!(set.contains(&MegaHalSymbol::new("HELLO")));
+        assert!(set.contains(&MegaHalSymbol::new("hello")));
+    }
+
+    #[test]
+    fn megahal_symbol_to_string_lossy() {
+        let sym = MegaHalSymbol::new("Hello");
+        assert_eq!(sym.to_string_lossy(), "HELLO");
+    }
+
+    // --- Engine lifecycle tests ---
+
+    #[test]
     fn new_engine_creates_empty_model() {
         let hal = test_hal();
         assert_eq!(hal.model().dictionary.len(), 2); // just sentinels
@@ -335,16 +372,175 @@ mod tests {
     }
 
     #[test]
-    fn respond_returns_non_empty() {
+    fn learn_multiple_sentences_grows_dict() {
         let mut hal = test_hal();
-        // Train with some data first.
-        for _ in 0..5 {
-            hal.learn("The quick brown fox jumps over the lazy dog.");
-            hal.learn("Dogs are wonderful animals that bring joy to people.");
-            hal.learn("Cats and dogs are popular pets around the world.");
-        }
-        hal.set_limit(GenerationLimit::Iterations(10));
+        hal.learn("The cat sat.");
+        let after_first = hal.model().dictionary.len();
+        hal.learn("A new dog ran.");
+        let after_second = hal.model().dictionary.len();
+        assert!(after_second > after_first);
+    }
+
+    // --- respond tests ---
+
+    #[test]
+    fn respond_returns_non_empty() {
+        let mut hal = trained_hal();
         let reply = hal.respond("Tell me about dogs.");
         assert!(!reply.is_empty());
+    }
+
+    #[test]
+    fn respond_learns_before_generating() {
+        let mut hal = test_hal();
+        // No training data at all. First respond call should learn the input.
+        hal.set_limit(GenerationLimit::Iterations(5));
+        let _ = hal.respond("The cat sat on the mat and looked at the world.");
+        // After responding, the model should have learned the input tokens.
+        assert!(hal.model().dictionary.len() > 2);
+    }
+
+    #[test]
+    fn respond_deterministic_with_same_seed() {
+        let build = || {
+            let mut hal = trained_hal();
+            hal.respond("Tell me about cats.")
+        };
+        assert_eq!(build(), build());
+    }
+
+    #[test]
+    fn respond_returns_canned_when_empty() {
+        let mut hal = test_hal();
+        // Very short input with no training → model can't generate.
+        hal.set_limit(GenerationLimit::Iterations(5));
+        let reply = hal.respond("Hi.");
+        // Should return the canned fallback message.
+        assert_eq!(reply, "I don't know enough to answer you yet!");
+    }
+
+    // --- Keyword config tests ---
+
+    #[test]
+    fn set_keyword_config_builds_aux_symbols() {
+        let mut hal = test_hal();
+        let mut config = KeywordConfig::default();
+        config.auxiliary.insert("MY".into());
+        config.auxiliary.insert("YOUR".into());
+        hal.set_keyword_config(config);
+        assert_eq!(hal.aux_symbols.len(), 2);
+    }
+
+    #[test]
+    fn respond_with_banned_words() {
+        let mut hal = trained_hal();
+        let mut config = KeywordConfig::default();
+        config.banned.insert("THE".into());
+        config.banned.insert("ON".into());
+        hal.set_keyword_config(config);
+        // Should still generate a reply even with banned words.
+        let reply = hal.respond("The cat.");
+        assert!(!reply.is_empty());
+    }
+
+    // --- Greeting tests ---
+
+    #[test]
+    fn greet_without_training_returns_hello() {
+        let mut hal = test_hal();
+        assert_eq!(hal.greet(), "Hello!");
+    }
+
+    #[test]
+    fn greet_with_empty_greetings_returns_hello() {
+        let mut hal = test_hal();
+        hal.set_greetings(vec![]);
+        assert_eq!(hal.greet(), "Hello!");
+    }
+
+    #[test]
+    fn greet_with_greetings_and_training() {
+        let mut hal = trained_hal();
+        hal.set_greetings(vec!["DOGS".into()]);
+        let greeting = hal.greet();
+        // With training data about dogs and "DOGS" as greeting keyword,
+        // should produce something (may fallback to "Hello!" if generation fails).
+        assert!(!greeting.is_empty());
+    }
+
+    // --- Generation limit tests ---
+
+    #[test]
+    fn set_limit_iterations() {
+        let mut hal = trained_hal();
+        hal.set_limit(GenerationLimit::Iterations(1));
+        let reply = hal.respond("Tell me about foxes.");
+        assert!(!reply.is_empty());
+    }
+
+    #[test]
+    fn set_limit_both() {
+        let mut hal = trained_hal();
+        hal.set_limit(GenerationLimit::Both {
+            timeout: std::time::Duration::from_millis(100),
+            max_iterations: 5,
+        });
+        let reply = hal.respond("Tell me about foxes.");
+        assert!(!reply.is_empty());
+    }
+
+    // --- File loading tests ---
+
+    #[test]
+    fn load_word_list_parses_file() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("megahal_test_load_word_list.txt");
+        fs::write(&path, "# comment\nHELLO\nworld\n\n# another\nFOO\n").unwrap();
+        let words = load_word_list(&path).unwrap();
+        assert_eq!(words, vec!["HELLO", "WORLD", "FOO"]);
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn load_swap_file_parses_pairs() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("megahal_test_load_swap_file.txt");
+        fs::write(&path, "# comment\nI\tYOU\nMY YOUR\n").unwrap();
+        let pairs = load_swap_file(&path).unwrap();
+        assert_eq!(
+            pairs,
+            vec![
+                ("I".to_string(), "YOU".to_string()),
+                ("MY".to_string(), "YOUR".to_string()),
+            ]
+        );
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn train_from_file_learns() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("megahal_test_train_from_file.txt");
+        fs::write(
+            &path,
+            "# comment\nThe cat sat on the mat.\nDogs are nice animals that play.\n",
+        )
+        .unwrap();
+        let mut hal = test_hal();
+        hal.train_from_file(&path).unwrap();
+        assert!(hal.model().dictionary.len() > 2);
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn train_from_file_skips_comments_and_blanks() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("megahal_test_train_comments.txt");
+        fs::write(&path, "# this is a comment\n\n# another comment\n").unwrap();
+        let mut hal = test_hal();
+        hal.train_from_file(&path).unwrap();
+        // Only comments and blanks → nothing learned.
+        assert_eq!(hal.model().dictionary.len(), 2);
+        fs::remove_file(&path).ok();
     }
 }

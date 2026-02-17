@@ -163,6 +163,40 @@ pub fn word_in_dict<S: Symbol>(dict: &SymbolDict<S>, symbol: &S) -> bool {
 mod tests {
     use super::*;
 
+    // --- Test infrastructure ---
+
+    #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+    struct TestSym(String);
+
+    impl Symbol for TestSym {
+        fn error() -> Self {
+            TestSym("<ERROR>".into())
+        }
+        fn fin() -> Self {
+            TestSym("<FIN>".into())
+        }
+    }
+
+    impl AsRef<[u8]> for TestSym {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_bytes()
+        }
+    }
+
+    fn sym(s: &str) -> TestSym {
+        TestSym(s.to_uppercase())
+    }
+
+    fn dict_with(words: &[&str]) -> SymbolDict<TestSym> {
+        let mut dict = SymbolDict::new();
+        for w in words {
+            dict.intern(sym(w));
+        }
+        dict
+    }
+
+    // --- SwapTable tests ---
+
     #[test]
     fn swap_table_basic() {
         let swap = SwapTable {
@@ -191,10 +225,147 @@ mod tests {
     }
 
     #[test]
+    fn swap_empty_table() {
+        let swap = SwapTable::default();
+        assert_eq!(swap.apply("HELLO"), vec!["HELLO"]);
+    }
+
+    // --- KeywordConfig tests ---
+
+    #[test]
     fn keyword_config_default() {
         let config = KeywordConfig::default();
         assert!(config.banned.is_empty());
         assert!(config.auxiliary.is_empty());
         assert!(config.swap.pairs.is_empty());
+    }
+
+    // --- extract_keywords tests ---
+
+    #[test]
+    fn extract_skips_words_not_in_dict() {
+        let dict = dict_with(&["HELLO", "WORLD"]);
+        let config = KeywordConfig::default();
+        let tokens = vec![sym("HELLO"), sym(" "), sym("UNKNOWN")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        assert!(kws.contains("HELLO"));
+        assert!(!kws.contains("UNKNOWN"));
+    }
+
+    #[test]
+    fn extract_skips_non_alphanumeric_start() {
+        let dict = dict_with(&["HELLO", " ", "."]);
+        let config = KeywordConfig::default();
+        let tokens = vec![sym("HELLO"), sym(" "), sym(".")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        assert!(kws.contains("HELLO"));
+        assert!(!kws.contains(" "));
+        assert!(!kws.contains("."));
+    }
+
+    #[test]
+    fn extract_skips_banned() {
+        let dict = dict_with(&["THE", "CAT"]);
+        let mut config = KeywordConfig::default();
+        config.banned.insert("THE".into());
+        let tokens = vec![sym("THE"), sym("CAT")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        assert!(!kws.contains("THE"));
+        assert!(kws.contains("CAT"));
+    }
+
+    #[test]
+    fn extract_aux_added_when_primary_exists() {
+        let dict = dict_with(&["MY", "CAT"]);
+        let mut config = KeywordConfig::default();
+        config.auxiliary.insert("MY".into());
+        let tokens = vec![sym("MY"), sym("CAT")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        // Primary pass gets CAT (not banned, not aux).
+        // Auxiliary pass then adds MY (because primary found at least one).
+        assert!(kws.contains("CAT"));
+        assert!(kws.contains("MY"));
+    }
+
+    #[test]
+    fn extract_no_aux_without_primary() {
+        let dict = dict_with(&["MY"]);
+        let mut config = KeywordConfig::default();
+        config.auxiliary.insert("MY".into());
+        let tokens = vec![sym("MY")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        // No primary keywords found → aux pass doesn't run.
+        assert!(kws.is_empty());
+    }
+
+    #[test]
+    fn extract_with_swap_substitution() {
+        let dict = dict_with(&["YOU", "CAT"]);
+        let mut config = KeywordConfig::default();
+        config.swap = SwapTable {
+            pairs: vec![("I".into(), "YOU".into())],
+        };
+        // Token "I" swaps to "YOU" (which IS in dict). "CAT" is unchanged.
+        let tokens = vec![sym("I"), sym(" "), sym("CAT")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        assert!(kws.contains("YOU"));
+        assert!(kws.contains("CAT"));
+        assert!(!kws.contains("I"));
+    }
+
+    #[test]
+    fn extract_swap_target_must_be_in_dict() {
+        let dict = dict_with(&["CAT"]); // "YOU" is NOT in dict
+        let mut config = KeywordConfig::default();
+        config.swap = SwapTable {
+            pairs: vec![("I".into(), "YOU".into())],
+        };
+        let tokens = vec![sym("I"), sym(" "), sym("CAT")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        // "I" swaps to "YOU", but "YOU" is not in dict → skipped.
+        assert!(!kws.contains("YOU"));
+        assert!(kws.contains("CAT"));
+    }
+
+    #[test]
+    fn extract_empty_input() {
+        let dict = dict_with(&["HELLO"]);
+        let config = KeywordConfig::default();
+        let tokens: Vec<TestSym> = vec![];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        assert!(kws.is_empty());
+    }
+
+    #[test]
+    fn extract_all_banned_yields_empty() {
+        let dict = dict_with(&["THE", "A", "IS"]);
+        let mut config = KeywordConfig::default();
+        config.banned.insert("THE".into());
+        config.banned.insert("A".into());
+        config.banned.insert("IS".into());
+        let tokens = vec![sym("THE"), sym("A"), sym("IS")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        assert!(kws.is_empty());
+    }
+
+    // --- word_in_dict tests ---
+
+    #[test]
+    fn word_in_dict_found() {
+        let dict = dict_with(&["HELLO"]);
+        assert!(word_in_dict(&dict, &sym("HELLO")));
+    }
+
+    #[test]
+    fn word_in_dict_missing() {
+        let dict = dict_with(&["HELLO"]);
+        assert!(!word_in_dict(&dict, &sym("NOPE")));
+    }
+
+    #[test]
+    fn word_in_dict_rejects_error_sentinel() {
+        let dict: SymbolDict<TestSym> = SymbolDict::new();
+        // ERROR sentinel is at ID 0, but word_in_dict should reject it.
+        assert!(!word_in_dict(&dict, &TestSym::error()));
     }
 }
