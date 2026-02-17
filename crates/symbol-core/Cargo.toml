@@ -1,0 +1,8 @@
+[package]
+name = "symbol-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core Symbol trait and SymbolId types for generic Markov chain models"
+
+[dependencies]

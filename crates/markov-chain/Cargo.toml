@@ -1,0 +1,11 @@
+[package]
+name = "markov-chain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bidirectional Markov model with context window for n-gram learning and generation"
+
+[dependencies]
+symbol-core.workspace = true
+ngram-trie.workspace = true
+symbol-dict.workspace = true

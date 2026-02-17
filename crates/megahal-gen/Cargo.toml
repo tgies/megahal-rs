@@ -1,0 +1,13 @@
+[package]
+name = "megahal-gen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MegaHAL reply generation: babble, seeding, bidirectional generation, surprise evaluation"
+
+[dependencies]
+symbol-core.workspace = true
+ngram-trie.workspace = true
+symbol-dict.workspace = true
+markov-chain.workspace = true
+rand.workspace = true

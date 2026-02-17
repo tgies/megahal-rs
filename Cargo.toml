@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/symbol-core",
+    "crates/ngram-trie",
+    "crates/symbol-dict",
+    "crates/markov-chain",
+    "crates/megahal-tokenizer",
+    "crates/megahal-keywords",
+    "crates/megahal-gen",
+    "crates/megahal",
+]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+symbol-core = { path = "crates/symbol-core" }
+ngram-trie = { path = "crates/ngram-trie" }
+symbol-dict = { path = "crates/symbol-dict" }
+markov-chain = { path = "crates/markov-chain" }
+megahal-tokenizer = { path = "crates/megahal-tokenizer" }
+megahal-keywords = { path = "crates/megahal-keywords" }
+megahal-gen = { path = "crates/megahal-gen" }
+megahal = { path = "crates/megahal" }
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+bincode = "2"
+
+[package]
+name = "megahal-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "megahal"
+path = "src/main.rs"
+
+[dependencies]
+megahal.workspace = true
+rand.workspace = true
+clap = { version = "4", features = ["derive"] }

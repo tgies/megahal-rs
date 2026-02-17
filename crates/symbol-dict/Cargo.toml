@@ -1,0 +1,9 @@
+[package]
+name = "symbol-dict"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Generic interning dictionary mapping Symbol values to compact SymbolId identifiers"
+
+[dependencies]
+symbol-core.workspace = true

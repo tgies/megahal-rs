@@ -1,0 +1,10 @@
+[package]
+name = "megahal-keywords"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MegaHAL keyword extraction: two-pass algorithm with swap table, banned/auxiliary lists"
+
+[dependencies]
+symbol-core.workspace = true
+symbol-dict.workspace = true

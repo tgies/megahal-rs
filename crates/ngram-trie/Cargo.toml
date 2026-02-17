@@ -1,0 +1,9 @@
+[package]
+name = "ngram-trie"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Arena-based n-gram frequency trie with sorted children and saturating counts"
+
+[dependencies]
+symbol-core.workspace = true
