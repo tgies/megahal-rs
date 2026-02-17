@@ -276,17 +276,20 @@ fn brain_save_load_deterministic() {
     let bytes_b = std::fs::read(&path_b).unwrap();
     assert_eq!(bytes_a, bytes_b, "deterministic builds should produce identical brains");
 
-    // Load into a fresh instance and verify it produces a meaningful reply.
-    // (We don't assert response equality across instances because HashSet
-    // iteration order is non-deterministic in Rust, which can cause the
-    // keyword seeding path to diverge even with identical models and RNG seeds.)
-    let mut loaded = MegaHal::new(5, SmallRng::seed_from_u64(99));
-    loaded.set_limit(GenerationLimit::Iterations(100));
-    loaded.load_brain(&path_a).unwrap();
+    // Load both into fresh instances and verify identical responses.
+    // (Keyword seeding sorts the keyword vec, so iteration order is deterministic
+    // regardless of HashSet layout.)
+    let mut loaded_a = MegaHal::new(5, SmallRng::seed_from_u64(99));
+    loaded_a.set_limit(GenerationLimit::Iterations(100));
+    loaded_a.load_brain(&path_a).unwrap();
 
-    let reply = loaded.respond("Tell me about animals.");
-    assert!(!reply.is_empty());
-    assert_ne!(reply, "I don't know enough to answer you yet!");
+    let mut loaded_b = MegaHal::new(5, SmallRng::seed_from_u64(99));
+    loaded_b.set_limit(GenerationLimit::Iterations(100));
+    loaded_b.load_brain(&path_b).unwrap();
+
+    let reply_a = loaded_a.respond("Tell me about animals.");
+    let reply_b = loaded_b.respond("Tell me about animals.");
+    assert_eq!(reply_a, reply_b, "identical brains + seeds should produce identical replies");
 
     std::fs::remove_file(&path_a).ok();
     std::fs::remove_file(&path_b).ok();

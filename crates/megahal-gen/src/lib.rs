@@ -215,7 +215,8 @@ where
 
     // If keywords exist, try to find a non-auxiliary keyword as seed.
     if !keywords.is_empty() {
-        let keyword_vec: Vec<&S> = keywords.iter().collect();
+        let mut keyword_vec: Vec<&S> = keywords.iter().collect();
+        keyword_vec.sort();
         let start = rng.random_range(0..keyword_vec.len());
 
         for offset in 0..keyword_vec.len() {
