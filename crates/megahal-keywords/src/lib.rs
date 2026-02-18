@@ -302,9 +302,11 @@ mod tests {
     #[test]
     fn extract_with_swap_substitution() {
         let dict = dict_with(&["YOU", "CAT"]);
-        let mut config = KeywordConfig::default();
-        config.swap = SwapTable {
-            pairs: vec![("I".into(), "YOU".into())],
+        let config = KeywordConfig {
+            swap: SwapTable {
+                pairs: vec![("I".into(), "YOU".into())],
+            },
+            ..Default::default()
         };
         // Token "I" swaps to "YOU" (which IS in dict). "CAT" is unchanged.
         let tokens = vec![sym("I"), sym(" "), sym("CAT")];
@@ -317,9 +319,11 @@ mod tests {
     #[test]
     fn extract_swap_target_must_be_in_dict() {
         let dict = dict_with(&["CAT"]); // "YOU" is NOT in dict
-        let mut config = KeywordConfig::default();
-        config.swap = SwapTable {
-            pairs: vec![("I".into(), "YOU".into())],
+        let config = KeywordConfig {
+            swap: SwapTable {
+                pairs: vec![("I".into(), "YOU".into())],
+            },
+            ..Default::default()
         };
         let tokens = vec![sym("I"), sym(" "), sym("CAT")];
         let kws = extract_keywords(&tokens, &dict, &config, sym);

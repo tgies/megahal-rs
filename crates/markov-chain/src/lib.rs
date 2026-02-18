@@ -37,7 +37,7 @@ impl ContextWindow {
         }
     }
 
-    /// Reset the window: set slot[0] to `root`, all others to `None`.
+    /// Reset the window: set slot\[0\] to `root`, all others to `None`.
     pub fn initialize(&mut self, root: NodeRef) {
         for slot in &mut self.slots {
             *slot = None;
@@ -60,7 +60,7 @@ impl ContextWindow {
 
     /// Mutating advance: update context by finding or creating children.
     ///
-    /// Used during learning. Same traversal as [`advance`], but uses
+    /// Used during learning. Same traversal as `advance`, but uses
     /// `Trie::add_child` which creates new nodes and increments counts.
     pub fn advance_and_learn(&mut self, trie: &mut Trie, symbol: SymbolId) {
         for d in (1..=self.order as usize + 1).rev() {
@@ -347,14 +347,14 @@ mod tests {
         }
 
         // At depth 1 (after seeing A), B should also be findable.
-        if let Some(parent_at_1) = ctx.at_depth(1) {
-            if let Some(child_b) = model.forward.find_child(parent_at_1, id_b) {
-                let child = model.forward.node(child_b);
-                let parent = model.forward.node(parent_at_1);
-                let prob = child.count as f64 / parent.usage as f64;
-                // After "A", "B" should be highly probable.
-                assert!(prob > 0.0);
-            }
+        if let Some(parent_at_1) = ctx.at_depth(1)
+            && let Some(child_b) = model.forward.find_child(parent_at_1, id_b)
+        {
+            let child = model.forward.node(child_b);
+            let parent = model.forward.node(parent_at_1);
+            let prob = child.count as f64 / parent.usage as f64;
+            // After "A", "B" should be highly probable.
+            assert!(prob > 0.0);
         }
     }
 }

@@ -25,7 +25,7 @@ pub trait Symbol: Clone + Eq + Ord + Hash + Debug + Send + Sync {
     fn fin() -> Self;
 }
 
-/// Compact identifier assigned to a symbol by a [`symbol_dict::SymbolDict`].
+/// Compact identifier assigned to a symbol by a `SymbolDict`.
 ///
 /// Uses `u16` storage, supporting up to 65,534 unique symbols (IDs 0 and 1
 /// are reserved for sentinels). This matches the original MegaHAL limit but

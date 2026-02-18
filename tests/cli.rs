@@ -15,7 +15,7 @@ fn data_dir() -> PathBuf {
 }
 
 fn megahal_cmd() -> Command {
-    Command::from(cargo_bin_cmd!("megahal"))
+    cargo_bin_cmd!("megahal")
 }
 
 // ---------------------------------------------------------------------------
