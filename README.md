@@ -21,7 +21,7 @@ megahal-cli          thin CLI wrapper (clap)
                   └── symbol-core
 ```
 
-The bottom four crates (`symbol-core`, `ngram-trie`, `symbol-dict`, `markov-chain`) are fully generic over any `Symbol` type — no string or MegaHAL assumptions.
+The bottom four crates (`symbol-core`, `ngram-trie`, `symbol-dict`, `markov-chain`) are fully generic over any `Symbol` type.
 
 ## Build & Run
 
