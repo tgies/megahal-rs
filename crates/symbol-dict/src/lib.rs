@@ -11,7 +11,7 @@
 //! Sentinel entries `ERROR_ID` (0) and `FIN_ID` (1) are pre-populated at construction.
 
 use serde::{Deserialize, Serialize};
-use symbol_core::{Symbol, SymbolId, ERROR_ID, FIN_ID};
+use symbol_core::{ERROR_ID, FIN_ID, Symbol, SymbolId};
 
 /// An interning dictionary that maps symbols to compact [`SymbolId`] values.
 ///
@@ -134,9 +134,7 @@ mod tests {
 
     impl Ord for TestSym {
         fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-            self.0
-                .to_uppercase()
-                .cmp(&other.0.to_uppercase())
+            self.0.to_uppercase().cmp(&other.0.to_uppercase())
         }
     }
 

@@ -626,10 +626,7 @@ mod tests {
         assert_ne!(reply, "I don't know enough to answer you yet!");
 
         // Dictionary size should match.
-        assert_eq!(
-            hal.model().dictionary.len(),
-            hal2.model().dictionary.len()
-        );
+        assert_eq!(hal.model().dictionary.len(), hal2.model().dictionary.len());
 
         fs::remove_file(&path).ok();
     }

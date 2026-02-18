@@ -7,19 +7,16 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use megahal::{
-    GenerationLimit, KeywordConfig, MegaHal, SwapTable, load_swap_file, load_word_list,
-};
+use megahal::{GenerationLimit, KeywordConfig, MegaHal, SwapTable, load_swap_file, load_word_list};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
-/// Path to the original MegaHAL data directory.
+/// Path to the MegaHAL data directory (bundled in the repo).
 fn data_dir() -> PathBuf {
     // CARGO_MANIFEST_DIR = megahal-rs/crates/megahal
-    // Data files live at megahal-workspace/megahal/
-    // That's three levels up, then into megahal/.
+    // Data files are at megahal-rs/data/
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    manifest.join("../../../megahal")
+    manifest.join("../../data")
 }
 
 /// Build a fully-configured MegaHAL instance trained on the real data files.
@@ -125,7 +122,10 @@ fn respond_incorporates_keywords() {
     let has_alpha_word = reply_upper
         .split(|c: char| !c.is_ascii_alphabetic() && c != '\'')
         .any(|w| w.len() > 2);
-    assert!(has_alpha_word, "reply should contain substantive words: {reply}");
+    assert!(
+        has_alpha_word,
+        "reply should contain substantive words: {reply}"
+    );
 }
 
 #[test]
@@ -139,7 +139,9 @@ fn multiple_responses_show_variation() {
 
     // Collect unique responses — with such different inputs, we should get
     // at least 2 distinct replies.
-    let unique: HashSet<&str> = [r1.as_str(), r2.as_str(), r3.as_str()].into_iter().collect();
+    let unique: HashSet<&str> = [r1.as_str(), r2.as_str(), r3.as_str()]
+        .into_iter()
+        .collect();
     assert!(
         unique.len() >= 2,
         "expected variation across responses, got: [{r1}], [{r2}], [{r3}]"
@@ -227,14 +229,12 @@ fn brain_save_load_preserves_responses() {
     // Save brain.
     let dir = std::env::temp_dir();
     let brain_path = dir.join("megahal_integration_test.brn");
-    hal.save_brain(&brain_path)
-        .expect("failed to save brain");
+    hal.save_brain(&brain_path).expect("failed to save brain");
 
     // Load brain into a fresh instance with the same seed.
     let mut hal2 = MegaHal::new(5, SmallRng::seed_from_u64(42));
     hal2.set_limit(GenerationLimit::Iterations(100));
-    hal2.load_brain(&brain_path)
-        .expect("failed to load brain");
+    hal2.load_brain(&brain_path).expect("failed to load brain");
 
     // Both should have the same dictionary size.
     assert_eq!(
@@ -274,7 +274,10 @@ fn brain_save_load_deterministic() {
     // Brain files should be byte-identical.
     let bytes_a = std::fs::read(&path_a).unwrap();
     let bytes_b = std::fs::read(&path_b).unwrap();
-    assert_eq!(bytes_a, bytes_b, "deterministic builds should produce identical brains");
+    assert_eq!(
+        bytes_a, bytes_b,
+        "deterministic builds should produce identical brains"
+    );
 
     // Load both into fresh instances and verify identical responses.
     // (Keyword seeding sorts the keyword vec, so iteration order is deterministic
@@ -289,7 +292,10 @@ fn brain_save_load_deterministic() {
 
     let reply_a = loaded_a.respond("Tell me about animals.");
     let reply_b = loaded_b.respond("Tell me about animals.");
-    assert_eq!(reply_a, reply_b, "identical brains + seeds should produce identical replies");
+    assert_eq!(
+        reply_a, reply_b,
+        "identical brains + seeds should produce identical replies"
+    );
 
     std::fs::remove_file(&path_a).ok();
     std::fs::remove_file(&path_b).ok();

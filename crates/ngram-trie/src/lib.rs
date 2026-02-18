@@ -167,7 +167,9 @@ impl Trie {
                 self.nodes.push(TrieNode::new(symbol));
                 self.nodes[child_ref.as_usize()].count = 1;
                 self.nodes[parent.as_usize()].usage += 1;
-                self.nodes[parent.as_usize()].children.insert(idx, child_ref);
+                self.nodes[parent.as_usize()]
+                    .children
+                    .insert(idx, child_ref);
                 child_ref
             }
         }
@@ -257,12 +259,12 @@ mod tests {
         trie.add_child(root, SymbolId(1));
 
         let children = trie.children(root);
-        let symbols: Vec<SymbolId> = children
-            .iter()
-            .map(|&r| trie.node(r).symbol)
-            .collect();
+        let symbols: Vec<SymbolId> = children.iter().map(|&r| trie.node(r).symbol).collect();
 
-        assert_eq!(symbols, vec![SymbolId(1), SymbolId(3), SymbolId(7), SymbolId(10)]);
+        assert_eq!(
+            symbols,
+            vec![SymbolId(1), SymbolId(3), SymbolId(7), SymbolId(10)]
+        );
     }
 
     #[test]

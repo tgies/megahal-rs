@@ -10,7 +10,7 @@
 
 use ngram_trie::{NodeRef, Trie};
 use serde::{Deserialize, Serialize};
-use symbol_core::{Symbol, SymbolId, FIN_ID};
+use symbol_core::{FIN_ID, Symbol, SymbolId};
 use symbol_dict::SymbolDict;
 
 /// A sliding context window tracking position in an n-gram trie.

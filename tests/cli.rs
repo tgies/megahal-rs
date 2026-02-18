@@ -5,13 +5,13 @@
 
 use std::path::{Path, PathBuf};
 
-use assert_cmd::cargo::cargo_bin_cmd;
 use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 
-/// Path to the original MegaHAL data directory.
+/// Path to the MegaHAL data directory (bundled in the repo).
 fn data_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../megahal")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("data")
 }
 
 fn megahal_cmd() -> Command {
@@ -102,9 +102,12 @@ fn responds_to_input() {
     // Train on a file so the model has enough data to generate replies.
     megahal_cmd()
         .args([
-            "--seed", "42",
-            "--max-iterations", "20",
-            "--train", data_dir().join("megahal.trn").to_str().unwrap(),
+            "--seed",
+            "42",
+            "--max-iterations",
+            "20",
+            "--train",
+            data_dir().join("megahal.trn").to_str().unwrap(),
         ])
         .write_stdin("Tell me about the world.\nquit\n")
         .assert()
@@ -141,9 +144,12 @@ fn case_insensitive_exit() {
 fn train_flag_loads_file() {
     megahal_cmd()
         .args([
-            "--seed", "42",
-            "--max-iterations", "10",
-            "--train", data_dir().join("megahal.trn").to_str().unwrap(),
+            "--seed",
+            "42",
+            "--max-iterations",
+            "10",
+            "--train",
+            data_dir().join("megahal.trn").to_str().unwrap(),
         ])
         .write_stdin("quit\n")
         .assert()
@@ -155,10 +161,7 @@ fn train_flag_loads_file() {
 #[test]
 fn train_missing_file_fails() {
     megahal_cmd()
-        .args([
-            "--seed", "42",
-            "--train", "/nonexistent/path/megahal.trn",
-        ])
+        .args(["--seed", "42", "--train", "/nonexistent/path/megahal.trn"])
         .write_stdin("quit\n")
         .assert()
         .failure();
@@ -174,10 +177,14 @@ fn data_dir_loads_support_files() {
     // training data + greeting keywords rather than the bare "Hello!".
     megahal_cmd()
         .args([
-            "--seed", "42",
-            "--max-iterations", "20",
-            "--train", data_dir().join("megahal.trn").to_str().unwrap(),
-            "--data-dir", data_dir().to_str().unwrap(),
+            "--seed",
+            "42",
+            "--max-iterations",
+            "20",
+            "--train",
+            data_dir().join("megahal.trn").to_str().unwrap(),
+            "--data-dir",
+            data_dir().to_str().unwrap(),
         ])
         .write_stdin("quit\n")
         .assert()
@@ -201,10 +208,14 @@ fn brain_save_and_load() {
     // Step 1: Train and save brain.
     megahal_cmd()
         .args([
-            "--seed", "42",
-            "--max-iterations", "10",
-            "--train", data_dir().join("megahal.trn").to_str().unwrap(),
-            "--brain", brain_path.to_str().unwrap(),
+            "--seed",
+            "42",
+            "--max-iterations",
+            "10",
+            "--train",
+            data_dir().join("megahal.trn").to_str().unwrap(),
+            "--brain",
+            brain_path.to_str().unwrap(),
         ])
         .write_stdin("quit\n")
         .assert()
@@ -215,14 +226,20 @@ fn brain_save_and_load() {
     // Brain file should exist.
     assert!(brain_path.exists(), "brain file should have been created");
     let size = std::fs::metadata(&brain_path).unwrap().len();
-    assert!(size > 100, "brain file should be non-trivial, got {size} bytes");
+    assert!(
+        size > 100,
+        "brain file should be non-trivial, got {size} bytes"
+    );
 
     // Step 2: Load brain without training.
     megahal_cmd()
         .args([
-            "--seed", "42",
-            "--max-iterations", "20",
-            "--brain", brain_path.to_str().unwrap(),
+            "--seed",
+            "42",
+            "--max-iterations",
+            "20",
+            "--brain",
+            brain_path.to_str().unwrap(),
         ])
         .write_stdin("Tell me something.\nquit\n")
         .assert()
@@ -246,9 +263,12 @@ fn seed_produces_deterministic_output() {
     let run = || {
         megahal_cmd()
             .args([
-                "--seed", "123",
-                "--max-iterations", "20",
-                "--train", data_dir().join("megahal.trn").to_str().unwrap(),
+                "--seed",
+                "123",
+                "--max-iterations",
+                "20",
+                "--train",
+                data_dir().join("megahal.trn").to_str().unwrap(),
             ])
             .write_stdin("Tell me about computers.\nquit\n")
             .output()

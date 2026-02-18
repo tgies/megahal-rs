@@ -156,7 +156,8 @@ fn is_keyword_eligible<S: Symbol + AsRef<[u8]>>(
 /// This requires constructing a temporary Symbol, which is the responsibility
 /// of the caller (the facade crate knows how to create `MegaHalSymbol` from strings).
 pub fn word_in_dict<S: Symbol>(dict: &SymbolDict<S>, symbol: &S) -> bool {
-    dict.find(symbol).is_some_and(|id| id != symbol_core::ERROR_ID)
+    dict.find(symbol)
+        .is_some_and(|id| id != symbol_core::ERROR_ID)
 }
 
 #[cfg(test)]

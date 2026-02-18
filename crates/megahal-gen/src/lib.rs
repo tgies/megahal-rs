@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use markov_chain::{BidirectionalModel, ContextWindow};
 use ngram_trie::Trie;
 use rand::Rng;
-use symbol_core::{Symbol, SymbolId, ERROR_ID, FIN_ID};
+use symbol_core::{ERROR_ID, FIN_ID, Symbol, SymbolId};
 use symbol_dict::SymbolDict;
 
 /// Controls how many candidate replies are generated before selecting the best.
@@ -301,11 +301,7 @@ where
 /// Score a candidate reply by surprise (Shannon entropy of keywords in context).
 ///
 /// MEGAHAL_SPEC.md Section 8.
-fn evaluate_reply<S>(
-    model: &BidirectionalModel<S>,
-    candidate: &[S],
-    keywords: &HashSet<S>,
-) -> f64
+fn evaluate_reply<S>(model: &BidirectionalModel<S>, candidate: &[S], keywords: &HashSet<S>) -> f64
 where
     S: Symbol + AsRef<[u8]>,
 {
@@ -552,10 +548,13 @@ mod tests {
 
     #[test]
     fn seed_selects_keyword() {
-        let model = trained_model(2, &[
-            &["THE", " ", "CAT", " ", "SAT"],
-            &["THE", " ", "DOG", " ", "RAN"],
-        ]);
+        let model = trained_model(
+            2,
+            &[
+                &["THE", " ", "CAT", " ", "SAT"],
+                &["THE", " ", "DOG", " ", "RAN"],
+            ],
+        );
         let mut kws = HashSet::new();
         kws.insert(ts("CAT"));
         let aux = HashSet::new();
@@ -621,10 +620,7 @@ mod tests {
 
     #[test]
     fn evaluate_with_keywords_returns_positive() {
-        let model = trained_model(
-            2,
-            &[&["A", "B", "C"], &["A", "B", "C"], &["A", "B", "C"]],
-        );
+        let model = trained_model(2, &[&["A", "B", "C"], &["A", "B", "C"], &["A", "B", "C"]]);
         let mut kws = HashSet::new();
         kws.insert(ts("B"));
         let candidate = vec![ts("A"), ts("B"), ts("C")];
