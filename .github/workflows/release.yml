@@ -55,6 +55,7 @@ jobs:
         with:
           executable-name: megahal
           target: ${{ matrix.platform.target }}
+          changes-file: ""
           extra-files: |
             README.md
             LICENSE
