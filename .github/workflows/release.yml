@@ -63,34 +63,3 @@ jobs:
             data/megahal.aux
             data/megahal.swp
             data/megahal.grt
-
-  publish-crates:
-    name: Publish to crates.io
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Publish crates (dependency order)
-        run: |
-          cargo publish -p symbol-core --locked
-          sleep 30
-          cargo publish -p ngram-trie --locked
-          cargo publish -p symbol-dict --locked
-          sleep 30
-          cargo publish -p markov-chain --locked
-          sleep 30
-          cargo publish -p megahal-tokenizer --locked
-          cargo publish -p megahal-keywords --locked
-          sleep 30
-          cargo publish -p megahal-gen --locked
-          sleep 30
-          cargo publish -p megahal --locked
-          sleep 30
-          cargo publish -p megahal-cli --locked
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

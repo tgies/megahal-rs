@@ -3,6 +3,7 @@ name = "megahal-keywords"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "MegaHAL keyword extraction: two-pass algorithm with swap table, banned/auxiliary lists"
 
 [dependencies]

@@ -3,6 +3,7 @@ name = "megahal"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "MegaHAL conversational engine — a bidirectional Markov chain chatbot"
 
 [dependencies]

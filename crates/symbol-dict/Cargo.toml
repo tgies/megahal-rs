@@ -3,6 +3,7 @@ name = "symbol-dict"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "Generic interning dictionary mapping Symbol values to compact SymbolId identifiers"
 
 [dependencies]

@@ -3,6 +3,7 @@ name = "megahal-gen"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "MegaHAL reply generation: babble, seeding, bidirectional generation, surprise evaluation"
 
 [dependencies]
