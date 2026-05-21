@@ -23,8 +23,8 @@
 //! ```
 
 use std::collections::HashSet;
-use std::fs;
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::Path;
 
 use markov_chain::BidirectionalModel;
@@ -33,6 +33,7 @@ use megahal_tokenizer::tokenize;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use symbol_core::Symbol;
+use thiserror::Error;
 
 // Re-export types that consumers (like the CLI) need.
 pub use megahal_gen::GenerationLimit;
@@ -116,6 +117,46 @@ const BRAIN_MAGIC: &[u8; 8] = b"MHALRUST";
 /// Brain file format version.
 const BRAIN_VERSION: u8 = 1;
 
+const DEFAULT_FALLBACK_REPLY: &str = "I don't know enough to answer you yet!";
+const DEFAULT_FALLBACK_GREETING: &str = "Hello!";
+
+/// Errors returned by brain serialization APIs.
+///
+/// Path-based helpers (`save_brain`, `load_brain`, `train_from_file`) still
+/// return `io::Result` for source compatibility; the reader/writer-based APIs
+/// surface this richer error type.
+#[derive(Debug, Error)]
+pub enum MegaHalError {
+    /// Filesystem or stream I/O error.
+    #[error(transparent)]
+    Io(#[from] io::Error),
+
+    /// The input did not start with the expected `MHALRUST` magic bytes.
+    #[error("not a MegaHAL brain file")]
+    BadMagic,
+
+    /// The brain file version is newer than this crate can read.
+    #[error("unsupported brain version: {0}")]
+    UnsupportedVersion(u8),
+
+    /// Bincode encoding or decoding failed.
+    #[error("brain serialization failed: {0}")]
+    Decode(String),
+}
+
+impl From<MegaHalError> for io::Error {
+    fn from(err: MegaHalError) -> Self {
+        match err {
+            MegaHalError::Io(e) => e,
+            MegaHalError::BadMagic
+            | MegaHalError::UnsupportedVersion(_)
+            | MegaHalError::Decode(_) => {
+                io::Error::new(io::ErrorKind::InvalidData, err.to_string())
+            }
+        }
+    }
+}
+
 /// The MegaHAL conversational engine.
 ///
 /// Generic over the PRNG type `R` for testability. Defaults to `SmallRng`
@@ -133,6 +174,10 @@ pub struct MegaHal<R: Rng> {
     limit: GenerationLimit,
     /// Random number generator.
     rng: R,
+    /// Message returned when reply generation produces nothing.
+    fallback_reply: String,
+    /// Message returned by `greet` when no greeting can be generated.
+    fallback_greeting: String,
 }
 
 impl<R: Rng> MegaHal<R> {
@@ -145,7 +190,19 @@ impl<R: Rng> MegaHal<R> {
             greetings: Vec::new(),
             limit: GenerationLimit::default(),
             rng,
+            fallback_reply: DEFAULT_FALLBACK_REPLY.to_string(),
+            fallback_greeting: DEFAULT_FALLBACK_GREETING.to_string(),
         }
+    }
+
+    /// Override the message returned when `respond` cannot generate a reply.
+    pub fn set_fallback_reply(&mut self, message: impl Into<String>) {
+        self.fallback_reply = message.into();
+    }
+
+    /// Override the message returned when `greet` cannot generate a greeting.
+    pub fn set_fallback_greeting(&mut self, message: impl Into<String>) {
+        self.fallback_greeting = message.into();
     }
 
     /// Set the generation limit.
@@ -215,7 +272,7 @@ impl<R: Rng> MegaHal<R> {
 
         // Step 5: Format output.
         if reply_symbols.is_empty() {
-            return "I don't know enough to answer you yet!".to_string();
+            return self.fallback_reply.clone();
         }
 
         let reply_strings: Vec<String> =
@@ -223,10 +280,51 @@ impl<R: Rng> MegaHal<R> {
         capitalize(&reply_strings)
     }
 
+    /// Generate a reply without learning from the input.
+    ///
+    /// Identical to [`respond`](Self::respond) except that the input is not
+    /// fed back into the model and the fallback reply is replaced with
+    /// `None`. Useful for embedding the engine in a host application that
+    /// wants to drive learning explicitly (so a player typing into a HUD
+    /// doesn't pollute the bot's vocabulary).
+    pub fn generate(&mut self, input: &str) -> Option<String> {
+        let token_strings = tokenize(input);
+        let tokens: Vec<MegaHalSymbol> = token_strings
+            .iter()
+            .map(|s| MegaHalSymbol::new(s))
+            .collect();
+
+        let keywords = extract_keywords(
+            &tokens,
+            &self.model.dictionary,
+            &self.keyword_config,
+            MegaHalSymbol::new,
+        );
+        let keyword_symbols: HashSet<MegaHalSymbol> =
+            keywords.iter().map(|s| MegaHalSymbol::new(s)).collect();
+
+        let reply_symbols = generate_reply(
+            &self.model,
+            &tokens,
+            &keyword_symbols,
+            &self.aux_symbols,
+            &self.limit,
+            &mut self.rng,
+        );
+
+        if reply_symbols.is_empty() {
+            return None;
+        }
+
+        let reply_strings: Vec<String> =
+            reply_symbols.iter().map(|s| s.to_string_lossy()).collect();
+        Some(capitalize(&reply_strings))
+    }
+
     /// Generate an initial greeting (before any user input).
     pub fn greet(&mut self) -> String {
         if self.greetings.is_empty() {
-            return "Hello!".to_string();
+            return self.fallback_greeting.clone();
         }
 
         // Pick a random greeting keyword.
@@ -246,7 +344,7 @@ impl<R: Rng> MegaHal<R> {
         );
 
         if reply_symbols.is_empty() {
-            return "Hello!".to_string();
+            return self.fallback_greeting.clone();
         }
 
         let reply_strings: Vec<String> =
@@ -254,12 +352,27 @@ impl<R: Rng> MegaHal<R> {
         capitalize(&reply_strings)
     }
 
-    /// Train from a text file (one sentence per line).
+    /// Train from a text file (one sentence per line, `#` lines skipped).
     pub fn train_from_file(&mut self, path: &Path) -> io::Result<()> {
-        let content = fs::read_to_string(path)?;
-        for line in content.lines() {
+        self.train_from_reader(BufReader::new(File::open(path)?))
+    }
+
+    /// Train from any buffered reader (one sentence per line, `#` lines skipped).
+    ///
+    /// ```
+    /// use megahal::MegaHal;
+    /// use rand::{rngs::SmallRng, SeedableRng};
+    /// use std::io::Cursor;
+    ///
+    /// let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(0));
+    /// let corpus = b"# header\nthe quick brown fox jumps over the lazy dog\n";
+    /// hal.train_from_reader(Cursor::new(&corpus[..])).unwrap();
+    /// assert!(hal.model().dictionary.len() > 2);
+    /// ```
+    pub fn train_from_reader<Rd: BufRead>(&mut self, reader: Rd) -> io::Result<()> {
+        for line in reader.lines() {
+            let line = line?;
             let trimmed = line.trim();
-            // Skip comments and empty lines.
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -279,15 +392,31 @@ impl<R: Rng> MegaHal<R> {
     /// Only the model (tries + dictionary) is saved — keyword config, greetings,
     /// generation limits, and RNG state are not included.
     pub fn save_brain(&self, path: &Path) -> io::Result<()> {
-        let mut data = Vec::new();
-        data.extend_from_slice(BRAIN_MAGIC);
-        data.push(BRAIN_VERSION);
+        let mut file = File::create(path)?;
+        self.save_brain_to_writer(&mut file)?;
+        Ok(())
+    }
 
-        let encoded = bincode::serde::encode_to_vec(&self.model, bincode::config::standard())
-            .map_err(|e| io::Error::other(e.to_string()))?;
-        data.extend_from_slice(&encoded);
-
-        fs::write(path, data)
+    /// Save the model to any writer (no filesystem required).
+    ///
+    /// ```
+    /// use megahal::MegaHal;
+    /// use rand::{rngs::SmallRng, SeedableRng};
+    ///
+    /// let hal = MegaHal::new(5, SmallRng::seed_from_u64(0));
+    /// let mut buf: Vec<u8> = Vec::new();
+    /// hal.save_brain_to_writer(&mut buf).unwrap();
+    /// assert!(buf.starts_with(b"MHALRUST"));
+    /// ```
+    pub fn save_brain_to_writer<Wr: Write>(&self, writer: &mut Wr) -> Result<(), MegaHalError> {
+        writer.write_all(BRAIN_MAGIC)?;
+        writer.write_all(&[BRAIN_VERSION])?;
+        bincode::serde::encode_into_std_write(&self.model, writer, bincode::config::standard())
+            .map_err(|e| match e {
+                bincode::error::EncodeError::Io { inner, .. } => MegaHalError::Io(inner),
+                other => MegaHalError::Decode(other.to_string()),
+            })?;
+        Ok(())
     }
 
     /// Load a model from a binary brain file, replacing the current model.
@@ -295,26 +424,47 @@ impl<R: Rng> MegaHal<R> {
     /// The model order is restored from the file. Keyword config, greetings,
     /// generation limits, and RNG are unaffected.
     pub fn load_brain(&mut self, path: &Path) -> io::Result<()> {
-        let data = fs::read(path)?;
+        let mut file = File::open(path)?;
+        self.load_brain_from_reader(&mut file)?;
+        Ok(())
+    }
 
-        if data.len() < 9 || &data[..8] != BRAIN_MAGIC {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "not a MegaHAL brain file",
-            ));
+    /// Load a model from any reader.
+    ///
+    /// ```
+    /// use megahal::MegaHal;
+    /// use rand::{rngs::SmallRng, SeedableRng};
+    /// use std::io::Cursor;
+    ///
+    /// let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(0));
+    /// hal.learn("the quick brown fox jumps over the lazy dog");
+    /// let mut buf: Vec<u8> = Vec::new();
+    /// hal.save_brain_to_writer(&mut buf).unwrap();
+    ///
+    /// let mut hal2 = MegaHal::new(5, SmallRng::seed_from_u64(0));
+    /// hal2.load_brain_from_reader(&mut Cursor::new(buf)).unwrap();
+    /// assert!(hal2.model().dictionary.len() > 2);
+    /// ```
+    pub fn load_brain_from_reader<Rd: Read>(
+        &mut self,
+        reader: &mut Rd,
+    ) -> Result<(), MegaHalError> {
+        let mut magic = [0u8; 8];
+        reader.read_exact(&mut magic)?;
+        if &magic != BRAIN_MAGIC {
+            return Err(MegaHalError::BadMagic);
         }
-        if data[8] != BRAIN_VERSION {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("unsupported brain version: {}", data[8]),
-            ));
+        let mut version = [0u8; 1];
+        reader.read_exact(&mut version)?;
+        if version[0] != BRAIN_VERSION {
+            return Err(MegaHalError::UnsupportedVersion(version[0]));
         }
-
-        let (model, _len) =
-            bincode::serde::decode_from_slice(&data[9..], bincode::config::standard())
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+        let model = bincode::serde::decode_from_std_read(reader, bincode::config::standard())
+            .map_err(|e| match e {
+                bincode::error::DecodeError::Io { inner, .. } => MegaHalError::Io(inner),
+                other => MegaHalError::Decode(other.to_string()),
+            })?;
         self.model = model;
-
         Ok(())
     }
 }
@@ -480,6 +630,113 @@ mod tests {
         hal.set_limit(GenerationLimit::Iterations(5));
         let reply = hal.respond("Hi.");
         // Should return the canned fallback message.
+        assert_eq!(reply, "I don't know enough to answer you yet!");
+    }
+
+    #[test]
+    fn set_fallback_reply_changes_canned_response() {
+        let mut hal = test_hal();
+        hal.set_limit(GenerationLimit::Iterations(5));
+        hal.set_fallback_reply("UNKNOWN");
+        assert_eq!(hal.respond("Hi."), "UNKNOWN");
+    }
+
+    #[test]
+    fn set_fallback_greeting_changes_default() {
+        let mut hal = test_hal();
+        hal.set_fallback_greeting("HOWDY");
+        assert_eq!(hal.greet(), "HOWDY");
+    }
+
+    #[test]
+    fn generate_returns_none_on_empty_model() {
+        let mut hal = test_hal();
+        hal.set_limit(GenerationLimit::Iterations(5));
+        assert_eq!(hal.generate("Hi."), None);
+    }
+
+    #[test]
+    fn generate_does_not_learn_from_input() {
+        let mut hal = test_hal();
+        hal.set_limit(GenerationLimit::Iterations(5));
+        // generate() must not mutate the dictionary, even on inputs that would
+        // ordinarily be learned by respond().
+        let before = hal.model().dictionary.len();
+        let _ = hal.generate("Tell me about the world and many other things.");
+        let after = hal.model().dictionary.len();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn generate_produces_string_when_model_has_data() {
+        let mut hal = trained_hal();
+        let reply = hal.generate("Tell me about dogs.");
+        // With a trained model and non-empty input, generate should usually
+        // produce something. Could be None if all candidates collide with
+        // input; trained_hal has enough variety to avoid that.
+        if let Some(s) = reply {
+            assert!(!s.is_empty());
+        }
+    }
+
+    #[test]
+    fn save_load_via_reader_writer_roundtrip() {
+        let mut hal = trained_hal();
+        let _ = hal.respond("Tell me about dogs.");
+
+        let mut buf: Vec<u8> = Vec::new();
+        hal.save_brain_to_writer(&mut buf).unwrap();
+        assert!(buf.starts_with(BRAIN_MAGIC));
+
+        let mut hal2 = test_hal();
+        hal2.set_limit(GenerationLimit::Iterations(20));
+        hal2.load_brain_from_reader(&mut io::Cursor::new(&buf))
+            .unwrap();
+
+        assert_eq!(hal.model().dictionary.len(), hal2.model().dictionary.len());
+    }
+
+    #[test]
+    fn load_from_reader_bad_magic_returns_typed_error() {
+        let mut hal = test_hal();
+        let mut cursor = io::Cursor::new(b"NOTABRAIN".to_vec());
+        match hal.load_brain_from_reader(&mut cursor) {
+            Err(MegaHalError::BadMagic) => {}
+            other => panic!("expected BadMagic, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_from_reader_bad_version_returns_typed_error() {
+        let mut hal = test_hal();
+        let mut data = Vec::new();
+        data.extend_from_slice(BRAIN_MAGIC);
+        data.push(99);
+        let mut cursor = io::Cursor::new(data);
+        match hal.load_brain_from_reader(&mut cursor) {
+            Err(MegaHalError::UnsupportedVersion(99)) => {}
+            other => panic!("expected UnsupportedVersion(99), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn train_from_reader_works_with_cursor() {
+        let mut hal = test_hal();
+        let corpus = b"# comment line\nthe quick brown fox jumps over the lazy dog\n\n";
+        hal.train_from_reader(io::Cursor::new(&corpus[..])).unwrap();
+        assert!(hal.model().dictionary.len() > 2);
+    }
+
+    #[test]
+    fn respond_does_not_echo_input_verbatim() {
+        // When the only thing the model knows is the user's input, every
+        // candidate reply equals the input. C's `dissimilar()` check rejects
+        // the baseline in that case; the facade falls back to the canned reply.
+        let mut hal = test_hal();
+        hal.set_limit(GenerationLimit::Iterations(20));
+        let input = "the very long input sentence with many distinct words and concepts";
+        hal.learn(input);
+        let reply = hal.respond(input);
         assert_eq!(reply, "I don't know enough to answer you yet!");
     }
 
@@ -670,7 +927,8 @@ mod tests {
 
         let mut hal = test_hal();
         let err = hal.load_brain(&path).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        // 4-byte file: reader hits EOF while reading the 8-byte magic header.
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
 
         fs::remove_file(&path).ok();
     }

@@ -161,8 +161,8 @@ mod tests {
         let id_hello = dict.intern(TestSym("HELLO".into()));
         let id_world = dict.intern(TestSym("WORLD".into()));
 
-        assert_eq!(id_hello, SymbolId(2)); // 0 and 1 are sentinels
-        assert_eq!(id_world, SymbolId(3));
+        assert_eq!(id_hello, SymbolId::new(2)); // 0 and 1 are sentinels
+        assert_eq!(id_world, SymbolId::new(3));
         assert_eq!(dict.len(), 4);
     }
 

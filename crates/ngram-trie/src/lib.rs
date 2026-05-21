@@ -11,7 +11,7 @@
 //! node's count nor its parent's usage are incremented further.
 
 use serde::{Deserialize, Serialize};
-use symbol_core::SymbolId;
+use symbol_core::{ERROR_ID, SymbolId};
 
 /// Opaque handle into the trie's node arena.
 ///
@@ -84,12 +84,12 @@ impl TrieNode {
 /// let root = trie.root();
 ///
 /// // Learning: add a child symbol, incrementing counts.
-/// let child = trie.add_child(root, SymbolId(2));
+/// let child = trie.add_child(root, SymbolId::new(2));
 /// assert_eq!(trie.node(child).count, 1);
 /// assert_eq!(trie.node(root).usage, 1);
 ///
 /// // Repeat to increment.
-/// let same_child = trie.add_child(root, SymbolId(2));
+/// let same_child = trie.add_child(root, SymbolId::new(2));
 /// assert_eq!(same_child, child);
 /// assert_eq!(trie.node(child).count, 2);
 /// ```
@@ -102,7 +102,7 @@ impl Trie {
     /// Create a new trie with a single root node.
     /// The root has symbol ERROR_ID (0) and represents the empty context.
     pub fn new() -> Self {
-        let root = TrieNode::new(SymbolId(0));
+        let root = TrieNode::new(ERROR_ID);
         Trie { nodes: vec![root] }
     }
 
@@ -215,7 +215,7 @@ mod tests {
         let trie = Trie::new();
         let root = trie.root();
         let node = trie.node(root);
-        assert_eq!(node.symbol, SymbolId(0));
+        assert_eq!(node.symbol, SymbolId::new(0));
         assert_eq!(node.usage, 0);
         assert_eq!(node.count, 0);
         assert!(trie.children(root).is_empty());
@@ -225,9 +225,9 @@ mod tests {
     fn add_child_creates_new_node() {
         let mut trie = Trie::new();
         let root = trie.root();
-        let child = trie.add_child(root, SymbolId(5));
+        let child = trie.add_child(root, SymbolId::new(5));
 
-        assert_eq!(trie.node(child).symbol, SymbolId(5));
+        assert_eq!(trie.node(child).symbol, SymbolId::new(5));
         assert_eq!(trie.node(child).count, 1);
         assert_eq!(trie.node(root).usage, 1);
         assert_eq!(trie.branch_count(root), 1);
@@ -238,8 +238,8 @@ mod tests {
         let mut trie = Trie::new();
         let root = trie.root();
 
-        let first = trie.add_child(root, SymbolId(5));
-        let second = trie.add_child(root, SymbolId(5));
+        let first = trie.add_child(root, SymbolId::new(5));
+        let second = trie.add_child(root, SymbolId::new(5));
 
         assert_eq!(first, second);
         assert_eq!(trie.node(first).count, 2);
@@ -253,17 +253,22 @@ mod tests {
         let root = trie.root();
 
         // Add children in non-sorted order.
-        trie.add_child(root, SymbolId(10));
-        trie.add_child(root, SymbolId(3));
-        trie.add_child(root, SymbolId(7));
-        trie.add_child(root, SymbolId(1));
+        trie.add_child(root, SymbolId::new(10));
+        trie.add_child(root, SymbolId::new(3));
+        trie.add_child(root, SymbolId::new(7));
+        trie.add_child(root, SymbolId::new(1));
 
         let children = trie.children(root);
         let symbols: Vec<SymbolId> = children.iter().map(|&r| trie.node(r).symbol).collect();
 
         assert_eq!(
             symbols,
-            vec![SymbolId(1), SymbolId(3), SymbolId(7), SymbolId(10)]
+            vec![
+                SymbolId::new(1),
+                SymbolId::new(3),
+                SymbolId::new(7),
+                SymbolId::new(10)
+            ]
         );
     }
 
@@ -271,9 +276,9 @@ mod tests {
     fn find_child_existing() {
         let mut trie = Trie::new();
         let root = trie.root();
-        let added = trie.add_child(root, SymbolId(42));
+        let added = trie.add_child(root, SymbolId::new(42));
 
-        let found = trie.find_child(root, SymbolId(42));
+        let found = trie.find_child(root, SymbolId::new(42));
         assert_eq!(found, Some(added));
     }
 
@@ -281,7 +286,7 @@ mod tests {
     fn find_child_missing() {
         let trie = Trie::new();
         let root = trie.root();
-        assert_eq!(trie.find_child(root, SymbolId(99)), None);
+        assert_eq!(trie.find_child(root, SymbolId::new(99)), None);
     }
 
     #[test]
@@ -290,17 +295,17 @@ mod tests {
         let root = trie.root();
 
         // Manually set count close to max.
-        let child = trie.add_child(root, SymbolId(1)); // count = 1, usage = 1
+        let child = trie.add_child(root, SymbolId::new(1)); // count = 1, usage = 1
         trie.nodes[child.as_usize()].count = u16::MAX - 1;
         trie.nodes[root.as_usize()].usage = u16::MAX as u32 - 1;
 
         // One more increment should work.
-        trie.add_child(root, SymbolId(1));
+        trie.add_child(root, SymbolId::new(1));
         assert_eq!(trie.node(child).count, u16::MAX);
         assert_eq!(trie.node(root).usage, u16::MAX as u32);
 
         // Further increments should be silently dropped.
-        trie.add_child(root, SymbolId(1));
+        trie.add_child(root, SymbolId::new(1));
         assert_eq!(trie.node(child).count, u16::MAX);
         assert_eq!(trie.node(root).usage, u16::MAX as u32);
     }
@@ -310,18 +315,18 @@ mod tests {
         let mut trie = Trie::new();
         let root = trie.root();
 
-        let level1 = trie.add_child(root, SymbolId(2));
-        let level2 = trie.add_child(level1, SymbolId(3));
-        let level3 = trie.add_child(level2, SymbolId(4));
+        let level1 = trie.add_child(root, SymbolId::new(2));
+        let level2 = trie.add_child(level1, SymbolId::new(3));
+        let level3 = trie.add_child(level2, SymbolId::new(4));
 
-        assert_eq!(trie.node(level3).symbol, SymbolId(4));
+        assert_eq!(trie.node(level3).symbol, SymbolId::new(4));
         assert_eq!(trie.node(level3).count, 1);
         assert_eq!(trie.node(level2).usage, 1);
 
         // Navigate back down.
-        let found = trie.find_child(root, SymbolId(2)).unwrap();
-        let found = trie.find_child(found, SymbolId(3)).unwrap();
-        let found = trie.find_child(found, SymbolId(4)).unwrap();
+        let found = trie.find_child(root, SymbolId::new(2)).unwrap();
+        let found = trie.find_child(found, SymbolId::new(3)).unwrap();
+        let found = trie.find_child(found, SymbolId::new(4)).unwrap();
         assert_eq!(found, level3);
     }
 
@@ -329,9 +334,9 @@ mod tests {
     fn trie_serde_roundtrip() {
         let mut trie = Trie::new();
         let root = trie.root();
-        trie.add_child(root, SymbolId(2));
-        trie.add_child(root, SymbolId(5));
-        trie.add_child(root, SymbolId(2)); // increment count
+        trie.add_child(root, SymbolId::new(2));
+        trie.add_child(root, SymbolId::new(5));
+        trie.add_child(root, SymbolId::new(2)); // increment count
 
         let json = serde_json::to_string(&trie).unwrap();
         let back: Trie = serde_json::from_str(&json).unwrap();
@@ -340,10 +345,10 @@ mod tests {
         assert_eq!(back.branch_count(back_root), 2);
         assert_eq!(back.node(back_root).usage, 3);
 
-        let child2 = back.find_child(back_root, SymbolId(2)).unwrap();
+        let child2 = back.find_child(back_root, SymbolId::new(2)).unwrap();
         assert_eq!(back.node(child2).count, 2);
 
-        let child5 = back.find_child(back_root, SymbolId(5)).unwrap();
+        let child5 = back.find_child(back_root, SymbolId::new(5)).unwrap();
         assert_eq!(back.node(child5).count, 1);
     }
 
@@ -353,7 +358,7 @@ mod tests {
         assert_eq!(trie.len(), 1); // just root
         assert!(trie.is_empty());
 
-        trie.add_child(trie.root(), SymbolId(1));
+        trie.add_child(trie.root(), SymbolId::new(1));
         assert_eq!(trie.len(), 2);
         assert!(!trie.is_empty());
     }
@@ -370,10 +375,10 @@ mod tests {
         let mut trie = Trie::new();
         let root = trie.root();
 
-        trie.add_child(root, SymbolId(1));
-        trie.add_child(root, SymbolId(2));
-        trie.add_child(root, SymbolId(3));
-        trie.add_child(root, SymbolId(1)); // increment existing
+        trie.add_child(root, SymbolId::new(1));
+        trie.add_child(root, SymbolId::new(2));
+        trie.add_child(root, SymbolId::new(3));
+        trie.add_child(root, SymbolId::new(1)); // increment existing
 
         assert_eq!(trie.node(root).usage, 4);
         assert_eq!(trie.branch_count(root), 3);

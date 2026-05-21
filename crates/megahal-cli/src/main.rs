@@ -3,7 +3,7 @@
 //! Thin wrapper over the `megahal` library crate.
 
 use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use megahal::{GenerationLimit, KeywordConfig, MegaHal, SwapTable, load_swap_file, load_word_list};
@@ -26,9 +26,15 @@ struct Args {
     #[arg(long)]
     train: Option<PathBuf>,
 
-    /// Brain file path. Loaded at startup (if exists), saved on exit.
-    #[arg(long)]
+    /// Brain file path. Loaded at startup if it exists, saved on exit.
+    /// Defaults to $XDG_DATA_HOME/megahal/megahal.brn (platform equivalent
+    /// on macOS / Windows). Pass --no-brain to disable persistence.
+    #[arg(long, conflicts_with = "no_brain")]
     brain: Option<PathBuf>,
+
+    /// Disable brain persistence: no file is loaded at startup or saved on exit.
+    #[arg(long)]
+    no_brain: bool,
 
     /// Directory containing support files (megahal.ban, .aux, .grt, .swp).
     #[arg(long)]
@@ -41,6 +47,24 @@ struct Args {
     /// Maximum generation iterations (0 = no limit).
     #[arg(long, default_value_t = 0)]
     max_iterations: usize,
+}
+
+/// Default brain location: `$XDG_DATA_HOME/megahal/megahal.brn` on Linux,
+/// `~/Library/Application Support/megahal/megahal.brn` on macOS,
+/// `%APPDATA%\megahal\megahal.brn` on Windows.
+fn default_brain_path() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join("megahal").join("megahal.brn"))
+}
+
+/// Resolve the effective brain path from the parsed args.
+///
+/// Returns `None` if `--no-brain` is set or no default path is available
+/// (which can happen on platforms where `dirs::data_dir()` returns `None`).
+fn resolve_brain_path(args: &Args) -> Option<PathBuf> {
+    if args.no_brain {
+        return None;
+    }
+    args.brain.clone().or_else(default_brain_path)
 }
 
 fn main() -> io::Result<()> {
@@ -87,8 +111,10 @@ fn main() -> io::Result<()> {
         hal.set_keyword_config(config);
     }
 
-    // Load brain if specified and file exists.
-    if let Some(ref path) = args.brain
+    let brain_path = resolve_brain_path(&args);
+
+    // Load brain if its file exists.
+    if let Some(ref path) = brain_path
         && path.exists()
     {
         eprintln!("Loading brain from {}...", path.display());
@@ -128,12 +154,22 @@ fn main() -> io::Result<()> {
         stdout.flush()?;
     }
 
-    // Save brain on exit if path specified.
-    if let Some(ref path) = args.brain {
+    // Save brain on exit unless --no-brain was set.
+    if let Some(ref path) = brain_path {
+        ensure_parent_dir(path)?;
         eprintln!("Saving brain to {}...", path.display());
         hal.save_brain(path)?;
         eprintln!("Brain saved.");
     }
 
+    Ok(())
+}
+
+fn ensure_parent_dir(path: &Path) -> io::Result<()> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
+    }
     Ok(())
 }

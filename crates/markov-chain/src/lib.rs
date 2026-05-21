@@ -225,8 +225,8 @@ mod tests {
         assert_eq!(ctx.deepest(), Some(trie.root()));
 
         // After advancing, deeper slots get filled.
-        let child = trie.add_child(trie.root(), SymbolId(2));
-        ctx.advance(&trie, SymbolId(2));
+        let child = trie.add_child(trie.root(), SymbolId::new(2));
+        ctx.advance(&trie, SymbolId::new(2));
         assert_eq!(ctx.at_depth(1), Some(child));
 
         // Deepest should be the child now.

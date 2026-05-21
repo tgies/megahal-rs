@@ -1,0 +1,33 @@
+[package]
+name = "megahal-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "MegaHAL CLI - a conversational chatbot using bidirectional Markov chains."
+keywords = ["chatbot", "megahal", "cli"]
+categories = ["command-line-utilities"]
+readme = "../../README.md"
+# tests/cli.rs depends on workspace-level data/ fixtures not packaged in
+# the published crate.
+exclude = ["tests/cli.rs"]
+
+[[bin]]
+name = "megahal"
+path = "src/main.rs"
+
+[dependencies]
+megahal.workspace = true
+rand.workspace = true
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+
+[lints]
+workspace = true

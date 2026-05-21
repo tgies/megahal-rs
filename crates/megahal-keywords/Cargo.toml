@@ -2,10 +2,19 @@
 name = "megahal-keywords"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish.workspace = true
-description = "MegaHAL keyword extraction: two-pass algorithm with swap table, banned/auxiliary lists"
+description = "Internal MegaHAL implementation detail; APIs are not stable. MegaHAL keyword extraction."
+keywords = ["megahal"]
+categories = ["science"]
+readme = "../../README.md"
 
 [dependencies]
 symbol-core.workspace = true
 symbol-dict.workspace = true
+
+[lints]
+workspace = true

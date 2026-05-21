@@ -31,10 +31,16 @@ pub trait Symbol: Clone + Eq + Ord + Hash + Debug + Send + Sync {
 /// are reserved for sentinels). This matches the original MegaHAL limit but
 /// is useful for any system needing compact symbol interning.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
-pub struct SymbolId(pub u16);
+pub struct SymbolId(u16);
 
 impl SymbolId {
-    /// Create a new SymbolId from a raw u16 value.
+    /// Construct a `SymbolId` from a raw u16. Available in const contexts.
+    #[inline]
+    pub const fn new(value: u16) -> Self {
+        SymbolId(value)
+    }
+
+    /// Read the underlying u16.
     #[inline]
     pub fn as_u16(self) -> u16 {
         self.0
@@ -55,10 +61,10 @@ impl SymbolId {
 }
 
 /// Sentinel SymbolId for "not found" / error state. Always ID 0.
-pub const ERROR_ID: SymbolId = SymbolId(0);
+pub const ERROR_ID: SymbolId = SymbolId::new(0);
 
 /// Sentinel SymbolId for end-of-sequence. Always ID 1.
-pub const FIN_ID: SymbolId = SymbolId(1);
+pub const FIN_ID: SymbolId = SymbolId::new(1);
 
 #[cfg(test)]
 mod tests {

@@ -129,6 +129,11 @@ mod tests {
     use super::*;
 
     #[test]
+    fn empty_input_returns_single_period() {
+        assert_eq!(tokenize(""), vec!["."]);
+    }
+
+    #[test]
     fn spec_example_dont_you_think_so() {
         let tokens = tokenize("Don't you think so?");
         assert_eq!(

@@ -2,12 +2,21 @@
 name = "symbol-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish.workspace = true
-description = "Core Symbol trait and SymbolId types for generic Markov chain models"
+description = "Internal MegaHAL implementation detail; APIs are not stable. Core Symbol trait and SymbolId type."
+keywords = ["megahal"]
+categories = ["science"]
+readme = "../../README.md"
 
 [dependencies]
 serde = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1"
+
+[lints]
+workspace = true

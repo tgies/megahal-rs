@@ -9,13 +9,21 @@ use assert_cmd::Command;
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 
-/// Path to the MegaHAL data directory (bundled in the repo).
+/// Path to the bundled MegaHAL data directory.
 fn data_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("data")
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("data")
 }
 
+/// Test-default command: passes `--no-brain` so the CLI never touches
+/// `$XDG_DATA_HOME`. Tests that exercise brain persistence build the
+/// command directly via `cargo_bin_cmd!`.
 fn megahal_cmd() -> Command {
-    cargo_bin_cmd!("megahal")
+    let mut cmd = cargo_bin_cmd!("megahal");
+    cmd.arg("--no-brain");
+    cmd
 }
 
 // ---------------------------------------------------------------------------
@@ -205,8 +213,10 @@ fn brain_save_and_load() {
     // Remove any leftover file from a previous run.
     let _ = std::fs::remove_file(&brain_path);
 
-    // Step 1: Train and save brain.
-    megahal_cmd()
+    // Step 1: Train and save brain. Build the command directly (without the
+    // `--no-brain` default) since this test is the one that exercises
+    // persistence.
+    cargo_bin_cmd!("megahal")
         .args([
             "--seed",
             "42",
@@ -232,7 +242,7 @@ fn brain_save_and_load() {
     );
 
     // Step 2: Load brain without training.
-    megahal_cmd()
+    cargo_bin_cmd!("megahal")
         .args([
             "--seed",
             "42",
@@ -252,6 +262,15 @@ fn brain_save_and_load() {
         }));
 
     let _ = std::fs::remove_file(&brain_path);
+}
+
+#[test]
+fn brain_and_no_brain_conflict() {
+    cargo_bin_cmd!("megahal")
+        .args(["--brain", "/tmp/x.brn", "--no-brain"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
 }
 
 // ---------------------------------------------------------------------------

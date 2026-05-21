@@ -2,8 +2,15 @@
 name = "markov-chain"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
-description = "Bidirectional Markov model with context window for n-gram learning and generation"
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Internal MegaHAL implementation detail; APIs are not stable. Bidirectional Markov model with context window."
+keywords = ["megahal"]
+categories = ["science"]
+readme = "../../README.md"
 
 [dependencies]
 symbol-core.workspace = true
@@ -13,3 +20,6 @@ serde = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1"
+
+[lints]
+workspace = true

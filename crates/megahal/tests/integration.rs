@@ -11,12 +11,9 @@ use megahal::{GenerationLimit, KeywordConfig, MegaHal, SwapTable, load_swap_file
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
-/// Path to the MegaHAL data directory (bundled in the repo).
+/// Path to the bundled MegaHAL data directory.
 fn data_dir() -> PathBuf {
-    // CARGO_MANIFEST_DIR = megahal-rs/crates/megahal
-    // Data files are at megahal-rs/data/
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    manifest.join("../../data")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data")
 }
 
 /// Build a fully-configured MegaHAL instance trained on the real data files.

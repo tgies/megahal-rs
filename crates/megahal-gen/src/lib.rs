@@ -65,11 +65,11 @@ where
     let empty_keywords = HashSet::new();
     let empty_aux = HashSet::new();
 
-    // Baseline reply (no keyword bias).
+    // Baseline reply (no keyword bias). Per C's `dissimilar()` check
+    // (megahal.c:2215-2218), drop the baseline when it equals the input.
     let mut best = generate_one_reply(model, &empty_keywords, &empty_aux, rng);
     if tokens_equal(&best, input_tokens) {
-        // Fallback will be handled by the caller (facade) with a canned message.
-        // For now, keep the baseline.
+        best = Vec::new();
     }
 
     let mut max_surprise: f64 = -1.0;
@@ -129,34 +129,32 @@ where
     let mut reply: Vec<SymbolId> = Vec::new();
     let mut used_key = false;
 
-    // Forward phase.
+    // Forward phase. Per C `reply()` (megahal.c:2420-2471), the backward phase
+    // always runs even when forward produces nothing.
     let mut ctx = model.forward_context();
 
     let seed_id = seed(model, keywords, aux_set, rng);
-    if seed_id == ERROR_ID || seed_id == FIN_ID {
-        // Empty reply — skip to backward phase or return empty.
-        return resolve_ids(model, &reply);
-    }
+    if seed_id != ERROR_ID && seed_id != FIN_ID {
+        reply.push(seed_id);
+        ctx.advance(&model.forward, seed_id);
 
-    reply.push(seed_id);
-    ctx.advance(&model.forward, seed_id);
-
-    loop {
-        let sym = babble(
-            &model.forward,
-            &ctx,
-            &model.dictionary,
-            keywords,
-            aux_set,
-            &reply,
-            &mut used_key,
-            rng,
-        );
-        if sym == ERROR_ID || sym == FIN_ID {
-            break;
+        loop {
+            let sym = babble(
+                &model.forward,
+                &ctx,
+                &model.dictionary,
+                keywords,
+                aux_set,
+                &reply,
+                &mut used_key,
+                rng,
+            );
+            if sym == ERROR_ID || sym == FIN_ID {
+                break;
+            }
+            reply.push(sym);
+            ctx.advance(&model.forward, sym);
         }
-        reply.push(sym);
-        ctx.advance(&model.forward, sym);
     }
 
     // Backward phase.
@@ -269,6 +267,12 @@ where
     }
 
     let branch = children.len();
+    // C `babble()` calls `rnd(node->usage)` which returns 0 when usage is 0
+    // and the loop falls through; `rng.random_range(0..0)` panics, so guard
+    // explicitly and treat usage==0 as sentence-terminating.
+    if node.usage == 0 {
+        return ERROR_ID;
+    }
     let mut i = rng.random_range(0..branch);
     let mut count = rng.random_range(0..node.usage as i64);
 
@@ -393,33 +397,28 @@ where
 
 /// Capitalize a token sequence per MegaHAL sentence-case rules.
 ///
-/// MEGAHAL_SPEC.md Section 9.1.
+/// MEGAHAL_SPEC.md Section 9.1. Mirrors C `capitalize()` in megahal.c:
+/// the sentence-start flag is set when a `!.?` is followed by whitespace,
+/// not by the punctuation itself.
 pub fn capitalize(tokens: &[String]) -> String {
     let raw: String = tokens.concat();
     let mut result = Vec::with_capacity(raw.len());
     let bytes = raw.as_bytes();
-    let mut capitalize_next = true;
+    let mut start = true;
 
     for (i, &b) in bytes.iter().enumerate() {
-        if capitalize_next && b.is_ascii_alphabetic() {
-            result.push(b.to_ascii_uppercase());
-            capitalize_next = false;
-        } else if b.is_ascii_alphabetic() {
-            result.push(b.to_ascii_lowercase());
+        if b.is_ascii_alphabetic() {
+            if start {
+                result.push(b.to_ascii_uppercase());
+            } else {
+                result.push(b.to_ascii_lowercase());
+            }
+            start = false;
         } else {
             result.push(b);
-            // After sentence-ending punctuation followed by space, capitalize next.
-            if matches!(b, b'!' | b'.' | b'?') && i > 2 {
-                // The next whitespace char triggers capitalization of the alpha after it.
-                capitalize_next = true;
-            }
-            if capitalize_next && b.is_ascii_whitespace() {
-                // Keep capitalize_next true through whitespace.
-            } else if !matches!(b, b'!' | b'.' | b'?') {
-                // Non-punctuation, non-whitespace resets the flag.
-                // Actually, only alphabetic chars consume the flag (handled above).
-                // Non-alpha, non-terminal-punct, non-space: keep capitalize_next as is.
-            }
+        }
+        if i > 2 && b.is_ascii_whitespace() && matches!(bytes[i - 1], b'!' | b'.' | b'?') {
+            start = true;
         }
     }
 
@@ -542,6 +541,26 @@ mod tests {
             ".".to_string(),
         ];
         assert_eq!(capitalize(&tokens), "Really? Yes.");
+    }
+
+    #[test]
+    fn capitalize_no_space_after_period_does_not_capitalize() {
+        let tokens = vec!["a.b.c".to_string()];
+        assert_eq!(capitalize(&tokens), "A.b.c");
+    }
+
+    #[test]
+    fn capitalize_glued_sentences_not_split() {
+        let tokens = vec!["hello.world".to_string()];
+        assert_eq!(capitalize(&tokens), "Hello.world");
+    }
+
+    #[test]
+    fn capitalize_leading_ellipsis() {
+        // First alpha after a leading run of dots still gets uppercased
+        // (start flag was never cleared).
+        let tokens = vec!["...hello".to_string()];
+        assert_eq!(capitalize(&tokens), "...Hello");
     }
 
     // --- seed tests ---

@@ -2,9 +2,19 @@
 name = "megahal"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish.workspace = true
-description = "MegaHAL conversational engine — a bidirectional Markov chain chatbot"
+description = "Faithful Rust port of Jason Hutchens' MegaHAL conversational engine."
+keywords = ["chatbot", "markov-chain", "nlp", "megahal", "conversational"]
+categories = ["science"]
+readme = "../../README.md"
+# tests/integration.rs needs workspace-level data/ fixtures that are not
+# packaged into the published crate; ship only unit tests, doctests, and
+# the self-contained snapshot tests.
+exclude = ["tests/integration.rs"]
 
 [dependencies]
 symbol-core.workspace = true
@@ -17,3 +27,7 @@ megahal-gen.workspace = true
 rand.workspace = true
 serde.workspace = true
 bincode.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

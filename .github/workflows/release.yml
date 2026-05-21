@@ -14,12 +14,13 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   build:
     name: Build - ${{ matrix.platform.os-name }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -43,18 +44,20 @@ jobs:
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v1
+        uses: houseabsolute/actions-rust-cross@fe6ede73c7f0a50412ec05994e2aa5a7bf635eac # v1.0.7
         with:
           command: build
           target: ${{ matrix.platform.target }}
-          args: "--locked --release"
+          args: "--locked --release --package megahal-cli"
           strip: true
 
       - name: Publish artifacts and release
-        uses: houseabsolute/actions-rust-release@v0
+        uses: houseabsolute/actions-rust-release@c44c1813a888b1d070680a3783d0ed0d8cc2b6b6 # v0.0.7
         with:
           executable-name: megahal
           target: ${{ matrix.platform.target }}

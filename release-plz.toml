@@ -1,0 +1,49 @@
+# Aggregate the internal crates' version bumps into `megahal-cli`'s CHANGELOG;
+# only that crate gets a git tag and a GitHub release per cycle.
+[workspace]
+git_tag_name = "{{ package }}-v{{ version }}"
+git_release_enable = false
+git_tag_enable = false
+changelog_update = false
+
+[[package]]
+name = "megahal-cli"
+git_tag_name = "v{{ version }}"
+git_tag_enable = true
+git_release_enable = true
+changelog_update = true
+changelog_path = "./CHANGELOG.md"
+changelog_include = [
+    "megahal",
+    "megahal-gen",
+    "megahal-tokenizer",
+    "megahal-keywords",
+    "markov-chain",
+    "ngram-trie",
+    "symbol-dict",
+    "symbol-core",
+]
+
+[[package]]
+name = "megahal"
+
+[[package]]
+name = "megahal-gen"
+
+[[package]]
+name = "megahal-tokenizer"
+
+[[package]]
+name = "megahal-keywords"
+
+[[package]]
+name = "markov-chain"
+
+[[package]]
+name = "ngram-trie"
+
+[[package]]
+name = "symbol-dict"
+
+[[package]]
+name = "symbol-core"
