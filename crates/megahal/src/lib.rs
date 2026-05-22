@@ -1,26 +1,117 @@
-//! MegaHAL conversational engine — a bidirectional Markov chain chatbot.
+//! A Rust port of Jason Hutchens' 1998 MegaHAL chatbot: a bidirectional
+//! Markov-chain engine that learns from text and replies to prompts.
 //!
-//! This is the facade crate that wires together all the lower-level components:
-//! - [`symbol_core`]: Symbol trait and SymbolId
-//! - [`ngram_trie`]: Arena-based frequency trie
-//! - [`symbol_dict`]: Interning dictionary
-//! - [`markov_chain`]: Bidirectional model and context window
-//! - [`megahal_tokenizer`]: Text tokenization
-//! - [`megahal_keywords`]: Keyword extraction
-//! - [`megahal_gen`]: Reply generation and evaluation
-//!
-//! # Quick Start
+//! # Quick start
 //!
 //! ```
 //! use megahal::MegaHal;
-//! use rand::rngs::SmallRng;
-//! use rand::SeedableRng;
+//! use rand::{rngs::SmallRng, SeedableRng};
 //!
 //! let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(42));
-//! hal.learn("The cat sat on the mat.");
-//! let reply = hal.respond("Tell me about the cat.");
+//! hal.learn("the cat sat on the mat");
+//! hal.learn("the dog chased the cat around the yard");
+//! let reply = hal.respond("tell me about the cat");
 //! println!("{reply}");
 //! ```
+//!
+//! # API tour
+//!
+//! The whole library is reached through one type, [`MegaHal`]. The five
+//! methods you'll touch most often:
+//!
+//! | Method | Purpose |
+//! |---|---|
+//! | [`MegaHal::new`] | Construct the engine with a model order and a `rand::Rng`. |
+//! | [`MegaHal::learn`] | Feed a sentence into the model without generating anything. |
+//! | [`MegaHal::respond`] | Feed input, then reply. Calls `learn` internally. |
+//! | [`MegaHal::generate`] | Reply without learning. Returns `None` on failure. |
+//! | [`MegaHal::set_limit`] | Cap how long generation may run (timeout, iterations, or both). |
+//!
+//! Persistence:
+//!
+//! | Method | When to use |
+//! |---|---|
+//! | [`MegaHal::save_brain`] / [`load_brain`](MegaHal::load_brain) | Path-based. |
+//! | [`save_brain_to_writer`](MegaHal::save_brain_to_writer) / [`load_brain_from_reader`](MegaHal::load_brain_from_reader) | Embed-friendly: stream to any `Write`/`Read`. |
+//! | [`MegaHal::train_from_file`] / [`train_from_reader`](MegaHal::train_from_reader) | Bulk-load a corpus. |
+//!
+//! Tuning:
+//!
+//! | Method | When to use |
+//! |---|---|
+//! | [`MegaHal::set_keyword_config`] | Install banned-word, auxiliary-word, and swap-table lists. |
+//! | [`MegaHal::set_greetings`] | Provide a list of words for [`MegaHal::greet`] to seed from. |
+//! | [`MegaHal::set_fallback_reply`] / [`set_fallback_greeting`](MegaHal::set_fallback_greeting) | Replace the canned "I don't know enough..." and "Hello!" strings. |
+//!
+//! # Concepts
+//!
+//! **Order** is the n-gram depth: a model of order 5 considers up to five
+//! preceding tokens when deciding what comes next. The default is `5` because
+//! that's what the C reference uses; smaller orders (2-3) produce wilder,
+//! more nonsensical output and are useful for "glitchy radio chatter"
+//! aesthetics, larger orders (5-7) stay closer to the training corpus.
+//!
+//! **Tokens** include both words and the whitespace/punctuation between them,
+//! so a sentence has roughly twice as many tokens as words. Learning is
+//! skipped for inputs of fewer than `order + 1` tokens.
+//!
+//! **Keywords** are the alphanumeric tokens from your input that the model
+//! has seen before, minus anything in the banned list, with one pass for
+//! "primary" keywords and a second pass for the auxiliary list (pronouns
+//! and the like). Generation tries to weave keywords into its reply.
+//!
+//! **Generation limits** trade reply quality for latency. The default is a
+//! one-second timeout, matching the C reference. For a game-loop use case
+//! a few milliseconds is usually enough; see the `game_hud` example.
+//!
+//! # Thread safety
+//!
+//! [`MegaHal<R>`] is `Send + Sync` whenever `R: Send + Sync` (e.g.
+//! `rand::rngs::SmallRng`). The engine is not internally parallel; a
+//! request-per-instance pattern is typical.
+//!
+//! # Brain file format
+//!
+//! Brain files start with `MHALRUST` followed by a one-byte version and a
+//! bincode-encoded model. **The format is not compatible with the original
+//! C MegaHAL's `.brn` files.**
+//!
+//! # Shipping a pre-trained brain
+//!
+//! To embed a model in your binary as an asset (no filesystem access at
+//! runtime, works on wasm and other sandboxed targets), train once and use
+//! [`include_bytes!`]:
+//!
+//! ```ignore
+//! use megahal::MegaHal;
+//! use rand::{rngs::SmallRng, SeedableRng};
+//! use std::io::Cursor;
+//!
+//! const BRAIN: &[u8] = include_bytes!("../assets/bot.brn");
+//!
+//! let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(0xC0FFEE));
+//! hal.load_brain_from_reader(&mut Cursor::new(BRAIN))
+//!     .expect("bundled brain is well-formed");
+//! ```
+//!
+//! Train the brain ahead of time with a short script that calls
+//! [`MegaHal::learn`] in a loop and then [`MegaHal::save_brain_to_writer`]
+//! to a file. Commit the resulting `bot.brn` to your repo.
+//!
+//! If you'd rather rebuild the brain from a plain-text corpus on every
+//! build (no binary blob in git), put a `build.rs` in your crate that
+//! trains and writes the brain to `OUT_DIR`, then
+//! `include_bytes!(concat!(env!("OUT_DIR"), "/bot.brn"))`. Requires
+//! `megahal` and `rand` under `[build-dependencies]` and pays the training
+//! cost on every clean build.
+//!
+//! Brain size scales with corpus vocabulary and `order`: a 100KB corpus at
+//! the default order=5 typically produces a 200KB-2MB brain.
+//!
+//! # See also
+//!
+//! - [`examples/`](https://github.com/tgies/megahal-rs/tree/main/crates/megahal/examples) for runnable programs (chatbot, game HUD, brain persistence).
+//! - The `megahal-cli` crate for the `megahal` command-line binary.
 
 use std::collections::HashSet;
 use std::fs::{self, File};
