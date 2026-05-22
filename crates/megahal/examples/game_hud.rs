@@ -1,5 +1,5 @@
-//! Embedding MegaHAL in a game HUD: simulate a 60 fps loop where each frame
-//! has a few milliseconds to produce a line of "robot chatter" for an NPC.
+//! Embedding MegaHAL in a simulation: loop where each frame
+//! has a few milliseconds to produce a line of text for a status display.
 //!
 //! Run with: `cargo run --example game_hud -p megahal`
 
@@ -18,7 +18,7 @@ const LORE: &[&str] = &[
 ];
 
 fn main() {
-    let mut bot = MegaHal::new(5, SmallRng::seed_from_u64(0xDEADBEEF));
+    let mut bot = MegaHal::new(5, SmallRng::seed_from_u64(42));
 
     // Tight per-frame budget. Iterations cap is what matters for `wasm32`
     // and other targets where `Instant::now()` may not be available;
@@ -37,10 +37,10 @@ fn main() {
         let started = Instant::now();
         // `generate` rather than `respond` so player-supplied input doesn't
         // train the model.
-        let chatter = bot
+        let reply = bot
             .generate("system status")
-            .unwrap_or_else(|| "[static]".into());
+            .unwrap_or_else(|| "no response".into());
         let elapsed = started.elapsed();
-        println!("frame {frame:>2} ({elapsed:>5.1?}): {chatter}");
+        println!("frame {frame:>2} ({elapsed:>5.1?}): {reply}");
     }
 }

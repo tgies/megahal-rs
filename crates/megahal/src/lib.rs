@@ -14,73 +14,32 @@
 //! println!("{reply}");
 //! ```
 //!
-//! # API tour
-//!
-//! The whole library is reached through one type, [`MegaHal`]. The five
-//! methods you'll touch most often:
-//!
-//! | Method | Purpose |
-//! |---|---|
-//! | [`MegaHal::new`] | Construct the engine with a model order and a `rand::Rng`. |
-//! | [`MegaHal::learn`] | Feed a sentence into the model without generating anything. |
-//! | [`MegaHal::respond`] | Feed input, then reply. Calls `learn` internally. |
-//! | [`MegaHal::generate`] | Reply without learning. Returns `None` on failure. |
-//! | [`MegaHal::set_limit`] | Cap how long generation may run (timeout, iterations, or both). |
-//!
-//! Persistence:
-//!
-//! | Method | When to use |
-//! |---|---|
-//! | [`MegaHal::save_brain`] / [`load_brain`](MegaHal::load_brain) | Path-based. |
-//! | [`save_brain_to_writer`](MegaHal::save_brain_to_writer) / [`load_brain_from_reader`](MegaHal::load_brain_from_reader) | Embed-friendly: stream to any `Write`/`Read`. |
-//! | [`MegaHal::train_from_file`] / [`train_from_reader`](MegaHal::train_from_reader) | Bulk-load a corpus. |
-//!
-//! Tuning:
-//!
-//! | Method | When to use |
-//! |---|---|
-//! | [`MegaHal::set_keyword_config`] | Install banned-word, auxiliary-word, and swap-table lists. |
-//! | [`MegaHal::set_greetings`] | Provide a list of words for [`MegaHal::greet`] to seed from. |
-//! | [`MegaHal::set_fallback_reply`] / [`set_fallback_greeting`](MegaHal::set_fallback_greeting) | Replace the canned "I don't know enough..." and "Hello!" strings. |
-//!
 //! # Concepts
 //!
-//! **Order** is the n-gram depth: a model of order 5 considers up to five
-//! preceding tokens when deciding what comes next. The default is `5` because
-//! that's what the C reference uses; smaller orders (2-3) produce wilder,
-//! more nonsensical output and are useful for "glitchy radio chatter"
-//! aesthetics, larger orders (5-7) stay closer to the training corpus.
-//!
-//! **Tokens** include both words and the whitespace/punctuation between them,
-//! so a sentence has roughly twice as many tokens as words. Learning is
-//! skipped for inputs of fewer than `order + 1` tokens.
-//!
-//! **Keywords** are the alphanumeric tokens from your input that the model
-//! has seen before, minus anything in the banned list, with one pass for
-//! "primary" keywords and a second pass for the auxiliary list (pronouns
-//! and the like). Generation tries to weave keywords into its reply.
-//!
-//! **Generation limits** trade reply quality for latency. The default is a
-//! one-second timeout, matching the C reference. For a game-loop use case
-//! a few milliseconds is usually enough; see the `game_hud` example.
+//! * **Order**: The n-gram depth. A model of order N considers up to N preceding
+//!   tokens. The default is 5.
+//! * **Tokens**: Words, whitespace, and punctuation. Sentences of fewer than
+//!   `order + 1` tokens are not learned.
+//! * **Keywords**: Alphanumeric tokens that the model has seen before (excluding
+//!   banned tokens). Generation biases random walks toward these keywords.
+//! * **Generation limits**: Stop conditions for response generation, configurable
+//!   via [`GenerationLimit`].
 //!
 //! # Thread safety
 //!
-//! [`MegaHal<R>`] is `Send + Sync` whenever `R: Send + Sync` (e.g.
-//! `rand::rngs::SmallRng`). The engine is not internally parallel; a
-//! request-per-instance pattern is typical.
+//! [`MegaHal<R>`] is `Send + Sync` if `R: Send + Sync`. The type does not perform
+//! internal synchronization.
 //!
 //! # Brain file format
 //!
 //! Brain files start with `MHALRUST` followed by a one-byte version and a
-//! bincode-encoded model. **The format is not compatible with the original
-//! C MegaHAL's `.brn` files.**
+//! bincode-encoded model. The format is not compatible with the original
+//! C MegaHAL's `.brn` files.
 //!
 //! # Shipping a pre-trained brain
 //!
-//! To embed a model in your binary as an asset (no filesystem access at
-//! runtime, works on wasm and other sandboxed targets), train once and use
-//! [`include_bytes!`]:
+//! To embed a trained model in your binary, serialize it during a build step and load
+//! the serialized bytes at runtime:
 //!
 //! ```ignore
 //! use megahal::MegaHal;
@@ -89,28 +48,14 @@
 //!
 //! const BRAIN: &[u8] = include_bytes!("../assets/bot.brn");
 //!
-//! let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(0xC0FFEE));
+//! let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(42));
 //! hal.load_brain_from_reader(&mut Cursor::new(BRAIN))
-//!     .expect("bundled brain is well-formed");
+//!     .expect("valid brain data");
 //! ```
-//!
-//! Train the brain ahead of time with a short script that calls
-//! [`MegaHal::learn`] in a loop and then [`MegaHal::save_brain_to_writer`]
-//! to a file. Commit the resulting `bot.brn` to your repo.
-//!
-//! If you'd rather rebuild the brain from a plain-text corpus on every
-//! build (no binary blob in git), put a `build.rs` in your crate that
-//! trains and writes the brain to `OUT_DIR`, then
-//! `include_bytes!(concat!(env!("OUT_DIR"), "/bot.brn"))`. Requires
-//! `megahal` and `rand` under `[build-dependencies]` and pays the training
-//! cost on every clean build.
-//!
-//! Brain size scales with corpus vocabulary and `order`: a 100KB corpus at
-//! the default order=5 typically produces a 200KB-2MB brain.
 //!
 //! # See also
 //!
-//! - [`examples/`](https://github.com/tgies/megahal-rs/tree/main/crates/megahal/examples) for runnable programs (chatbot, game HUD, brain persistence).
+//! - The examples directory in the repository source.
 //! - The `megahal-cli` crate for the `megahal` command-line binary.
 
 use std::collections::HashSet;
@@ -328,8 +273,6 @@ impl<R: Rng> MegaHal<R> {
     }
 
     /// Learn from input and generate a reply.
-    ///
-    /// This follows the MegaHAL conversation flow: learn first, then generate.
     pub fn respond(&mut self, input: &str) -> String {
         // Step 1: Tokenize.
         let token_strings = tokenize(input);
@@ -338,7 +281,7 @@ impl<R: Rng> MegaHal<R> {
             .map(|s| MegaHalSymbol::new(s))
             .collect();
 
-        // Step 2: Learn (before generating — matches original behavior).
+        // Step 2: Learn (before generating; matches original behavior).
         self.model.learn(&tokens);
 
         // Step 3: Extract keywords.
@@ -374,10 +317,8 @@ impl<R: Rng> MegaHal<R> {
     /// Generate a reply without learning from the input.
     ///
     /// Identical to [`respond`](Self::respond) except that the input is not
-    /// fed back into the model and the fallback reply is replaced with
-    /// `None`. Useful for embedding the engine in a host application that
-    /// wants to drive learning explicitly (so a player typing into a HUD
-    /// doesn't pollute the bot's vocabulary).
+    /// learned and the fallback reply is replaced with `None`. Useful for
+    /// embedding the engine in applications that handle learning explicitly.
     pub fn generate(&mut self, input: &str) -> Option<String> {
         let token_strings = tokenize(input);
         let tokens: Vec<MegaHalSymbol> = token_strings
@@ -479,9 +420,7 @@ impl<R: Rng> MegaHal<R> {
 
     /// Save the model to a binary brain file.
     ///
-    /// The file format is: 8-byte magic ("MHALRUST") + 1-byte version + bincode-encoded model.
-    /// Only the model (tries + dictionary) is saved — keyword config, greetings,
-    /// generation limits, and RNG state are not included.
+    /// Saves the tries and dictionary. Other configuration state is not saved.
     pub fn save_brain(&self, path: &Path) -> io::Result<()> {
         let mut file = File::create(path)?;
         self.save_brain_to_writer(&mut file)?;
@@ -762,9 +701,7 @@ mod tests {
     fn generate_produces_string_when_model_has_data() {
         let mut hal = trained_hal();
         let reply = hal.generate("Tell me about dogs.");
-        // With a trained model and non-empty input, generate should usually
-        // produce something. Could be None if all candidates collide with
-        // input; trained_hal has enough variety to avoid that.
+        // Verify that generate produces a reply when data is present in the model.
         if let Some(s) = reply {
             assert!(!s.is_empty());
         }

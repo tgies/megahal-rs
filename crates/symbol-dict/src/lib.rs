@@ -4,9 +4,7 @@
 //! - `entries`: symbols in insertion order (index = SymbolId)
 //! - `sorted_index`: SymbolIds sorted alphabetically by their symbol, for O(log n) lookup
 //!
-//! This design matches the original MegaHAL dictionary exactly, but is generic over
-//! any [`Symbol`] type. It is independently useful as a string interner or any
-//! system needing compact, ordered symbol interning.
+//! This design is generic over any [`Symbol`] type.
 //!
 //! Sentinel entries `ERROR_ID` (0) and `FIN_ID` (1) are pre-populated at construction.
 
@@ -67,11 +65,11 @@ impl<S: Symbol> SymbolDict<S> {
 
         match search_result {
             Ok(idx) => {
-                // Already exists — return existing ID.
+                // Already exists; return existing ID.
                 self.sorted_index[idx]
             }
             Err(insert_pos) => {
-                // New symbol — assign next ID.
+                // New symbol; assign next ID.
                 let new_id = SymbolId::from_usize(self.entries.len());
                 self.entries.push(symbol);
                 self.sorted_index.insert(insert_pos, new_id);

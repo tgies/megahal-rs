@@ -15,8 +15,7 @@ workspace.
 ## Install
 
 ```bash
-# Library (embed the engine in your own program). `rand` is needed because
-# `MegaHal` is generic over any `rand::Rng` and you supply the PRNG.
+# Add dependencies
 cargo add megahal rand
 
 # CLI (interactive chatbot at the terminal, installs as `megahal`)
@@ -30,9 +29,9 @@ use megahal::{MegaHal, GenerationLimit};
 use rand::{SeedableRng, rngs::SmallRng};
 use std::time::Duration;
 
-let mut bot = MegaHal::new(5, SmallRng::seed_from_u64(0xC0FFEE));
+let mut bot = MegaHal::new(5, SmallRng::seed_from_u64(42));
 
-// Per-frame budget for a game HUD: a few ms, capped iterations.
+// Limit generation timeout and iterations.
 bot.set_limit(GenerationLimit::Both {
     timeout: Duration::from_millis(4),
     max_iterations: 8,
@@ -46,13 +45,11 @@ for line in include_str!("../assets/lore.txt").lines() {
 // `respond` learns from the input first, then replies.
 let reply = bot.respond("system status");
 
-// `generate` is a no-learn variant for cases where the input is untrusted
-// and shouldn't pollute the model. Returns None on empty replies so the
-// caller can supply its own placeholder.
-let chatter: Option<String> = bot.generate("hello");
+// `generate` is a no-learn variant. Returns `None` on empty replies.
+let reply: Option<String> = bot.generate("hello");
 ```
 
-The brain file format is **not** compatible with the original C MegaHAL's
+The brain file format is not compatible with the original C MegaHAL's
 `.brn` files. See [`MegaHal::save_brain_to_writer`] and
 [`load_brain_from_reader`] for in-memory persistence without filesystem I/O.
 

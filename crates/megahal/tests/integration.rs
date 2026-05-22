@@ -1,8 +1,4 @@
-//! Integration tests for MegaHAL: full conversation flow with real data files.
-//!
-//! These tests use the original MegaHAL support files (megahal.trn, .ban, .aux,
-//! .swp, .grt) to exercise the full pipeline: training, keyword extraction with
-//! real banned/auxiliary/swap tables, response generation, and brain persistence.
+//! Integration tests for MegaHAL.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -134,7 +130,7 @@ fn multiple_responses_show_variation() {
     let r2 = hal.respond("What do you think about music?");
     let r3 = hal.respond("How do you feel about the weather?");
 
-    // Collect unique responses — with such different inputs, we should get
+    // Collect unique responses; with different inputs, we should get
     // at least 2 distinct replies.
     let unique: HashSet<&str> = [r1.as_str(), r2.as_str(), r3.as_str()]
         .into_iter()
@@ -205,11 +201,8 @@ fn greeting_uses_training_data() {
     let mut hal = trained_hal();
     let greeting = hal.greet();
 
-    // With training data and greeting keywords loaded, greet() should produce
-    // something other than the bare "Hello!" fallback.
+    // Verify greeting uses training data when loaded.
     assert!(!greeting.is_empty(), "greeting should not be empty");
-    // It *might* still return "Hello!" if the RNG happens to pick that keyword
-    // and the model generates it, but it should at least be a real response.
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +213,7 @@ fn greeting_uses_training_data() {
 fn brain_save_load_preserves_responses() {
     let mut hal = trained_hal();
 
-    // Have a conversation to seed additional model state.
+    // Generate a response to modify state.
     hal.respond("I enjoy programming computers.");
 
     // Save brain.
@@ -250,8 +243,7 @@ fn brain_save_load_preserves_responses() {
 
 #[test]
 fn brain_save_load_deterministic() {
-    // Two identically-constructed instances should produce identical brains and
-    // identical responses after loading.
+    // Verify deterministic brain loading and response generation.
     let build = || {
         let mut hal = trained_hal();
         hal.respond("I like dogs and cats.");
@@ -276,9 +268,7 @@ fn brain_save_load_deterministic() {
         "deterministic builds should produce identical brains"
     );
 
-    // Load both into fresh instances and verify identical responses.
-    // (Keyword seeding sorts the keyword vec, so iteration order is deterministic
-    // regardless of HashSet layout.)
+    // Load both and verify identical responses.
     let mut loaded_a = MegaHal::new(5, SmallRng::seed_from_u64(99));
     loaded_a.set_limit(GenerationLimit::Iterations(100));
     loaded_a.load_brain(&path_a).unwrap();
@@ -307,8 +297,7 @@ fn brain_file_is_reasonably_sized() {
     hal.save_brain(&path).unwrap();
 
     let size = std::fs::metadata(&path).unwrap().len();
-    // megahal.trn is small (~10KB), so the brain should be well under 1MB.
-    // In practice it's around 300-400KB.
+    // Verify brain size is reasonable.
     assert!(
         size > 1_000,
         "brain file should be at least 1KB, got {size} bytes"

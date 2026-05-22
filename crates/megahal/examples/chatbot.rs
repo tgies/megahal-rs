@@ -1,4 +1,4 @@
-//! A minimal interactive chatbot. Trains on a tiny hardcoded corpus, then
+//! An interactive chatbot example. Trains on a hardcoded corpus, then
 //! reads lines from stdin and replies to each one until EOF.
 //!
 //! Run with: `cargo run --example chatbot -p megahal`
@@ -18,7 +18,7 @@ const CORPUS: &[&str] = &[
 ];
 
 fn main() -> io::Result<()> {
-    let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(0xC0FFEE));
+    let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(42));
     hal.set_limit(GenerationLimit::Iterations(50));
     for line in CORPUS {
         hal.learn(line);

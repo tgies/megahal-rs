@@ -1,7 +1,4 @@
 //! CLI integration tests for the `megahal` binary.
-//!
-//! Uses `assert_cmd` to spawn the binary as a subprocess, pipe stdin,
-//! and assert on stdout/stderr/exit code.
 
 use std::path::{Path, PathBuf};
 
@@ -17,9 +14,7 @@ fn data_dir() -> PathBuf {
         .join("data")
 }
 
-/// Test-default command: passes `--no-brain` so the CLI never touches
-/// `$XDG_DATA_HOME`. Tests that exercise brain persistence build the
-/// command directly via `cargo_bin_cmd!`.
+/// Default command helper.
 fn megahal_cmd() -> Command {
     let mut cmd = cargo_bin_cmd!("megahal");
     cmd.arg("--no-brain");
@@ -54,7 +49,7 @@ fn version_flag() {
 
 #[test]
 fn greeting_on_startup() {
-    // With no training, greeting is "Hello!".
+    // Default greeting when untrained.
     megahal_cmd()
         .args(["--seed", "42", "--max-iterations", "10"])
         .write_stdin("quit\n")
@@ -83,7 +78,7 @@ fn exit_exits_cleanly() {
 
 #[test]
 fn eof_exits_cleanly() {
-    // Empty stdin (EOF immediately after greeting).
+    // Empty stdin.
     megahal_cmd()
         .args(["--seed", "42", "--max-iterations", "10"])
         .write_stdin("")
@@ -93,13 +88,13 @@ fn eof_exits_cleanly() {
 
 #[test]
 fn empty_lines_are_skipped() {
-    // Empty lines should not produce responses; only the actual input should.
+    // Empty lines are ignored.
     megahal_cmd()
         .args(["--seed", "42", "--max-iterations", "10"])
         .write_stdin("\n\n\nquit\n")
         .assert()
         .success()
-        // Should have exactly one "MegaHAL:" line (the greeting), not four.
+        // Only the greeting is printed.
         .stdout(predicate::function(|output: &str| {
             output.matches("MegaHAL:").count() == 1
         }));
@@ -107,7 +102,7 @@ fn empty_lines_are_skipped() {
 
 #[test]
 fn responds_to_input() {
-    // Train on a file so the model has enough data to generate replies.
+    // Train and respond.
     megahal_cmd()
         .args([
             "--seed",
@@ -120,7 +115,7 @@ fn responds_to_input() {
         .write_stdin("Tell me about the world.\nquit\n")
         .assert()
         .success()
-        // Greeting + at least one response = at least 2 "MegaHAL:" lines.
+        // Greeting + response.
         .stdout(predicate::function(|output: &str| {
             output.matches("MegaHAL:").count() >= 2
         }));
@@ -181,8 +176,7 @@ fn train_missing_file_fails() {
 
 #[test]
 fn data_dir_loads_support_files() {
-    // When --data-dir is given with real files, the greeting should use
-    // training data + greeting keywords rather than the bare "Hello!".
+    // Verify data-dir loads support files.
     megahal_cmd()
         .args([
             "--seed",
@@ -197,8 +191,6 @@ fn data_dir_loads_support_files() {
         .write_stdin("quit\n")
         .assert()
         .success();
-    // We don't assert a specific greeting since it depends on the model,
-    // but the process should complete without error.
 }
 
 // ---------------------------------------------------------------------------
@@ -210,12 +202,10 @@ fn brain_save_and_load() {
     let dir = std::env::temp_dir();
     let brain_path = dir.join("megahal_cli_test_brain.brn");
 
-    // Remove any leftover file from a previous run.
+    // Clean up previous files.
     let _ = std::fs::remove_file(&brain_path);
 
-    // Step 1: Train and save brain. Build the command directly (without the
-    // `--no-brain` default) since this test is the one that exercises
-    // persistence.
+    // Train and save the brain.
     cargo_bin_cmd!("megahal")
         .args([
             "--seed",
@@ -233,7 +223,6 @@ fn brain_save_and_load() {
         .stderr(predicate::str::contains("Saving brain"))
         .stderr(predicate::str::contains("Brain saved"));
 
-    // Brain file should exist.
     assert!(brain_path.exists(), "brain file should have been created");
     let size = std::fs::metadata(&brain_path).unwrap().len();
     assert!(
@@ -241,7 +230,7 @@ fn brain_save_and_load() {
         "brain file should be non-trivial, got {size} bytes"
     );
 
-    // Step 2: Load brain without training.
+    // Load saved brain.
     cargo_bin_cmd!("megahal")
         .args([
             "--seed",
@@ -256,7 +245,7 @@ fn brain_save_and_load() {
         .success()
         .stderr(predicate::str::contains("Loading brain"))
         .stderr(predicate::str::contains("Brain loaded"))
-        // Should produce a real response (not fallback), since model is loaded.
+        // Model is loaded.
         .stdout(predicate::function(|output: &str| {
             output.matches("MegaHAL:").count() >= 2
         }));

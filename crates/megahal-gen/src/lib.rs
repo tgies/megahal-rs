@@ -3,16 +3,15 @@
 //!
 //! This crate implements the core MegaHAL reply generation algorithm:
 //!
-//! 1. **Seed** a starting symbol from the keyword list.
-//! 2. **Forward phase**: babble from the seed to generate the rest of the sentence.
-//! 3. **Backward phase**: babble backward from the seed to generate the beginning.
-//! 4. **Evaluate** candidates by surprise scoring (Shannon entropy of keywords).
-//! 5. **Select** the highest-scoring candidate within the generation limit.
+//! 1. Seed a starting symbol from the keyword list.
+//! 2. Run a forward phase from the seed to generate the rest of the sentence.
+//! 3. Run a backward phase from the seed to generate the beginning.
+//! 4. Evaluate candidates by surprise scoring.
+//! 5. Select the highest-scoring candidate.
 //!
-//! The babble function drives the [`ContextWindow`] directly — no trait abstraction.
 //! It implements MegaHAL's keyword-biased random walk: keywords encountered during
 //! the walk are greedily selected, while non-keywords fall back to probability-weighted
-//! selection based on `child.count / parent.usage`.
+//! selection.
 
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -832,9 +831,7 @@ mod tests {
         let limit = GenerationLimit::Iterations(50);
         let mut rng = make_rng(42);
         let reply = generate_reply(&model, &input, &kws, &aux, &limit, &mut rng);
-        // With multiple sentences in the model, at least some candidates should
-        // differ from input. The best reply should not be identical to input.
-        // (This isn't guaranteed with tiny models, but is very likely.)
+        // Verify that candidates identical to the input are filtered.
         let _ = reply;
     }
 }

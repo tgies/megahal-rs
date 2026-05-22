@@ -1,12 +1,9 @@
 //! Bidirectional Markov model with context window for n-gram learning and generation.
 //!
-//! This crate provides [`BidirectionalModel`], which combines a forward trie,
-//! backward trie, and symbol dictionary into a complete bidirectional Markov model.
-//! The [`ContextWindow`] type manages the sliding context state used during both
-//! learning (mutating the trie) and generation/evaluation (read-only traversal).
+//! [`BidirectionalModel`] combines a forward trie, a backward trie, and a symbol
+//! dictionary. [`ContextWindow`] tracks context during learning and generation.
 //!
-//! The model is generic over any [`Symbol`] type, making it reusable for any
-//! n-gram modeling task — not just chatbots.
+//! The model is generic over the [`Symbol`] type.
 
 use ngram_trie::{NodeRef, Trie};
 use serde::{Deserialize, Serialize};
@@ -19,8 +16,8 @@ use symbol_dict::SymbolDict;
 /// original MegaHAL context array. Slot 0 is always the trie root. Deeper
 /// slots track progressively longer context paths.
 ///
-/// Because slots store [`NodeRef`] indices (not borrows), the window is safe
-/// to use alongside `&mut Trie` — no aliasing conflicts.
+/// Slots store [`NodeRef`] indices rather than borrows, allowing the window to
+/// be used alongside mutating trie operations.
 #[derive(Debug, Clone)]
 pub struct ContextWindow {
     slots: Vec<Option<NodeRef>>,
@@ -102,7 +99,7 @@ impl ContextWindow {
 
 /// A bidirectional Markov model: forward trie + backward trie + shared dictionary.
 ///
-/// Learning trains both tries from the same token sequence — forward (left-to-right)
+/// Learning trains both tries from the same token sequence, forward (left-to-right)
 /// and backward (right-to-left). This enables bidirectional reply generation where
 /// a seed word can be expanded both forward to the end of a sentence and backward
 /// to the beginning.

@@ -1,8 +1,4 @@
-//! Core Symbol trait and SymbolId types for generic Markov chain models.
-//!
-//! This crate defines the foundational abstraction for symbols in n-gram tries
-//! and interning dictionaries. A symbol can be any type that implements the
-//! [`Symbol`] trait — byte strings, integers, enums, or any other ordered type.
+//! Core Symbol trait and SymbolId types.
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -10,13 +6,6 @@ use std::hash::Hash;
 use serde::{Deserialize, Serialize};
 
 /// A symbol that can be stored in an n-gram trie or interning dictionary.
-///
-/// This trait is intentionally minimal — no string assumptions, no character
-/// classification. The `Ord` bound enables sorted trie children and dictionary
-/// indices. The `Hash` bound enables O(1) membership testing in keyword sets.
-///
-/// The two sentinel methods (`error` and `fin`) are structurally necessary for
-/// any Markov model that uses sentence boundaries. They are not application-specific.
 pub trait Symbol: Clone + Eq + Ord + Hash + Debug + Send + Sync {
     /// Sentinel value representing "symbol not found" or an error state.
     fn error() -> Self;
@@ -25,11 +14,10 @@ pub trait Symbol: Clone + Eq + Ord + Hash + Debug + Send + Sync {
     fn fin() -> Self;
 }
 
-/// Compact identifier assigned to a symbol by a `SymbolDict`.
+/// Compact identifier assigned to a symbol by a dictionary.
 ///
-/// Uses `u16` storage, supporting up to 65,534 unique symbols (IDs 0 and 1
-/// are reserved for sentinels). This matches the original MegaHAL limit but
-/// is useful for any system needing compact symbol interning.
+/// Uses `u16` storage, supporting up to 65,534 unique symbols. IDs 0 and 1
+/// are reserved for sentinels.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct SymbolId(u16);
 

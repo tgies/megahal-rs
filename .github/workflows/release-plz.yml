@@ -18,10 +18,8 @@ jobs:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      # RELEASE_TOKEN must be a PAT with `contents:write`. Tags created with
-      # the workflow's built-in GITHUB_TOKEN cannot fire the `release.yml`
-      # `push: tags` workflow (GitHub blocks workflow recursion), so a fallback
-      # would silently skip the binary build. Fail loudly instead.
+      # RELEASE_TOKEN must be a PAT with `contents:write`. The default
+      # GITHUB_TOKEN cannot trigger tag-push workflows.
       - name: Require RELEASE_TOKEN
         env:
           TOKEN: ${{ secrets.RELEASE_TOKEN }}

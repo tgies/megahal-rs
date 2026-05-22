@@ -1,4 +1,4 @@
-//! MegaHAL CLI — interactive conversational chatbot.
+//! MegaHAL CLI: an interactive conversational chatbot.
 //!
 //! Thin wrapper over the `megahal` library crate.
 
@@ -10,7 +10,7 @@ use megahal::{GenerationLimit, KeywordConfig, MegaHal, SwapTable, load_swap_file
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
-/// MegaHAL — a conversational chatbot using bidirectional Markov chains.
+/// MegaHAL: a conversational chatbot using bidirectional Markov chains.
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {

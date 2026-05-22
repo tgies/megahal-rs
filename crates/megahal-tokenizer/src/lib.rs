@@ -5,7 +5,7 @@
 //! tokens (whitespace, punctuation). Contractions like "DON'T" and "I'M" are
 //! kept as single tokens via the apostrophe rule.
 //!
-//! This crate has no dependencies on other megahal crates — it is a pure text
+//! This crate has no dependencies on other megahal crates; it is a text
 //! processing utility that produces `Vec<String>`.
 
 /// Tokenize input text per MegaHAL rules.

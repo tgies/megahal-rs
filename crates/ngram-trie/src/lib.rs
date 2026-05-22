@@ -1,13 +1,10 @@
 //! Arena-based n-gram frequency trie with sorted children and saturating counts.
 //!
-//! This crate provides a generic trie data structure for storing n-gram frequency
 //! statistics. Nodes are stored in a contiguous arena (`Vec<TrieNode>`) and
-//! referenced by opaque [`NodeRef`] handles, which are plain indices. This design
-//! avoids borrow checker issues when maintaining a context window alongside a
-//! mutable trie — indices don't borrow the arena.
+//! referenced by [`NodeRef`] handles.
 //!
 //! Children of each node are kept sorted by [`SymbolId`] for O(log n) binary
-//! search. Counts saturate at `u16::MAX` (65535) — once reached, neither the
+//! search. Counts saturate at `u16::MAX` (65535); once reached, neither the
 //! node's count nor its parent's usage are incremented further.
 
 use serde::{Deserialize, Serialize};
@@ -15,9 +12,7 @@ use symbol_core::{ERROR_ID, SymbolId};
 
 /// Opaque handle into the trie's node arena.
 ///
-/// This is a plain index — it does not borrow the trie. You can hold arbitrarily
-/// many `NodeRef` values while mutating the trie, which is essential for the
-/// context window pattern used during learning.
+/// This is an index into the trie's arena.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
 pub struct NodeRef(u32);
 
@@ -152,7 +147,7 @@ impl Trie {
 
         match search_result {
             Ok(idx) => {
-                // Child exists — increment counts with saturation.
+                // Child exists; increment counts with saturation.
                 let child_ref = self.nodes[parent.as_usize()].children[idx];
                 let child = &mut self.nodes[child_ref.as_usize()];
                 if child.count < u16::MAX {
@@ -162,7 +157,7 @@ impl Trie {
                 child_ref
             }
             Err(idx) => {
-                // Child doesn't exist — create it.
+                // Child doesn't exist; create it.
                 let child_ref = NodeRef::from_usize(self.nodes.len());
                 self.nodes.push(TrieNode::new(symbol));
                 self.nodes[child_ref.as_usize()].count = 1;

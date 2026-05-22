@@ -9,21 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0]
 
-First crates.io release. Renames the workspace's bidirectional Markov
-crate from `markov-chain` (taken on crates.io) to `megahal-markov`,
-adds embedding-friendly APIs to the facade, and fixes four algorithm
-bugs against the C reference.
+First release on crates.io. Renames the inner bidirectional Markov crate from `markov-chain` to `megahal-markov` to avoid a name conflict, exposes new APIs in the facade, and fixes four algorithm bugs relative to the C reference.
 
 ### Added
 
 - `MegaHal::save_brain_to_writer` / `load_brain_from_reader` for
   in-memory brain serialization without filesystem I/O.
 - `MegaHal::train_from_reader` for training from any `BufRead` source.
-- `MegaHal::generate`: no-learn variant of `respond` that returns
-  `Option<String>` and does not feed the input back into the model.
+- `MegaHal::generate`: a no-learn variant of `respond`.
 - `MegaHal::set_fallback_reply` / `set_fallback_greeting` for replacing
   the hardcoded "I don't know enough..." and "Hello!" messages.
-- `MegaHalError` thiserror enum surfaced from the new reader/writer APIs.
+- `MegaHalError` for reader and writer errors.
 - `megahal-cli` crate with `cargo install megahal-cli` for the `megahal`
   binary, extracted from the workspace root.
 - Runnable examples under `crates/megahal/examples`: `chatbot` (stdin

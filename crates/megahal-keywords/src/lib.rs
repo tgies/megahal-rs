@@ -60,10 +60,7 @@ pub struct KeywordConfig {
 /// `S` must implement `AsRef<[u8]>` so we can check if the first character is
 /// alphanumeric (a requirement of the extraction rules).
 ///
-/// `make_symbol` constructs a Symbol from a string for dictionary lookup. This
-/// is needed because after swap substitution, candidates are Strings, but the
-/// dictionary is keyed on `S`. The caller (which knows the concrete Symbol type)
-/// provides this factory.
+/// `make_symbol` constructs a `Symbol` from a string.
 ///
 /// Returns the keyword set as uppercase `String` values (matching the model's
 /// internal representation).

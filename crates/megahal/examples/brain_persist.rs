@@ -19,20 +19,19 @@ fn main() {
           foxes live in the forest and chase birds\n"
             .as_slice(),
     ))
-    .expect("training corpus is valid utf-8");
+    .unwrap();
 
     // Serialize to a Vec<u8>.
     let mut blob = Vec::new();
-    hal.save_brain_to_writer(&mut blob)
-        .expect("serializing to a Vec cannot fail except via bincode bugs");
+    hal.save_brain_to_writer(&mut blob).unwrap();
     println!("serialized brain: {} bytes", blob.len());
 
-    // Hydrate a fresh instance from the same bytes.
+    // Load a fresh instance from the same bytes.
     let mut restored = MegaHal::new(5, SmallRng::seed_from_u64(7));
     restored.set_limit(GenerationLimit::Iterations(20));
     restored
         .load_brain_from_reader(&mut Cursor::new(&blob))
-        .expect("blob round-trips through the same crate version");
+        .unwrap();
 
     println!(
         "restored reply: {}",
