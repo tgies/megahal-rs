@@ -480,12 +480,24 @@ impl<R: Rng> MegaHal<R> {
         reader: &mut Rd,
     ) -> Result<(), MegaHalError> {
         let mut magic = [0u8; 8];
-        reader.read_exact(&mut magic)?;
+        if let Err(e) = reader.read_exact(&mut magic) {
+            return Err(if e.kind() == io::ErrorKind::UnexpectedEof {
+                MegaHalError::BadMagic
+            } else {
+                MegaHalError::Io(e)
+            });
+        }
         if &magic != BRAIN_MAGIC {
             return Err(MegaHalError::BadMagic);
         }
         let mut version = [0u8; 1];
-        reader.read_exact(&mut version)?;
+        if let Err(e) = reader.read_exact(&mut version) {
+            return Err(if e.kind() == io::ErrorKind::UnexpectedEof {
+                MegaHalError::BadMagic
+            } else {
+                MegaHalError::Io(e)
+            });
+        }
         if version[0] != BRAIN_VERSION {
             return Err(MegaHalError::UnsupportedVersion(version[0]));
         }
@@ -955,8 +967,8 @@ mod tests {
 
         let mut hal = test_hal();
         let err = hal.load_brain(&path).unwrap_err();
-        // 4-byte file: reader hits EOF while reading the 8-byte magic header.
-        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
+        // 4-byte file: magic header is truncated, resulting in InvalidData (BadMagic).
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
 
         fs::remove_file(&path).ok();
     }
