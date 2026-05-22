@@ -258,24 +258,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "markov-chain"
-version = "0.1.0"
-dependencies = [
- "ngram-trie",
- "serde",
- "serde_json",
- "symbol-core",
- "symbol-dict",
-]
-
-[[package]]
 name = "megahal"
 version = "0.1.0"
 dependencies = [
  "bincode",
- "markov-chain",
  "megahal-gen",
  "megahal-keywords",
+ "megahal-markov",
  "megahal-tokenizer",
  "ngram-trie",
  "rand",
@@ -301,7 +290,7 @@ dependencies = [
 name = "megahal-gen"
 version = "0.1.0"
 dependencies = [
- "markov-chain",
+ "megahal-markov",
  "ngram-trie",
  "rand",
  "symbol-core",
@@ -312,6 +301,17 @@ dependencies = [
 name = "megahal-keywords"
 version = "0.1.0"
 dependencies = [
+ "symbol-core",
+ "symbol-dict",
+]
+
+[[package]]
+name = "megahal-markov"
+version = "0.1.0"
+dependencies = [
+ "ngram-trie",
+ "serde",
+ "serde_json",
  "symbol-core",
  "symbol-dict",
 ]

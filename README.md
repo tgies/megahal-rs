@@ -80,10 +80,10 @@ megahal-cli          thin CLI wrapper (clap)
   └── megahal        facade: MegaHalSymbol, config, brain persistence
         ├── megahal-gen        reply generation, babble, surprise scoring
         │   ├── megahal-keywords   keyword extraction, swap/ban/aux tables
-        │   │   └── markov-chain ── ngram-trie ── symbol-core
-        │   └── markov-chain
+        │   │   └── megahal-markov ── ngram-trie ── symbol-core
+        │   └── megahal-markov
         ├── megahal-tokenizer  text tokenization (MegaHAL boundary rules)
-        └── markov-chain       bidirectional model + context window
+        └── megahal-markov     bidirectional model + context window
               ├── ngram-trie   arena-based n-gram frequency trie
               │   └── symbol-core  Symbol trait + SymbolId
               └── symbol-dict  generic interning dictionary

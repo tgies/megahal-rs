@@ -118,7 +118,7 @@ use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::Path;
 
-use markov_chain::BidirectionalModel;
+use megahal_markov::BidirectionalModel;
 use megahal_gen::{capitalize, generate_reply};
 use megahal_tokenizer::tokenize;
 use rand::Rng;

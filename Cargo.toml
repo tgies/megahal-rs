@@ -4,7 +4,7 @@ members = [
     "crates/symbol-core",
     "crates/ngram-trie",
     "crates/symbol-dict",
-    "crates/markov-chain",
+    "crates/megahal-markov",
     "crates/megahal-tokenizer",
     "crates/megahal-keywords",
     "crates/megahal-gen",
@@ -25,7 +25,7 @@ publish = true
 symbol-core = { path = "crates/symbol-core", version = "0.1.0" }
 ngram-trie = { path = "crates/ngram-trie", version = "0.1.0" }
 symbol-dict = { path = "crates/symbol-dict", version = "0.1.0" }
-markov-chain = { path = "crates/markov-chain", version = "0.1.0" }
+megahal-markov = { path = "crates/megahal-markov", version = "0.1.0" }
 megahal-tokenizer = { path = "crates/megahal-tokenizer", version = "0.1.0" }
 megahal-keywords = { path = "crates/megahal-keywords", version = "0.1.0" }
 megahal-gen = { path = "crates/megahal-gen", version = "0.1.0" }

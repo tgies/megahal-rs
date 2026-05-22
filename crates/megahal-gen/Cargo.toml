@@ -16,7 +16,7 @@ readme = "../../README.md"
 symbol-core.workspace = true
 ngram-trie.workspace = true
 symbol-dict.workspace = true
-markov-chain.workspace = true
+megahal-markov.workspace = true
 rand.workspace = true
 
 [lints]

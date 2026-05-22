@@ -18,7 +18,7 @@ changelog_include = [
     "megahal-gen",
     "megahal-tokenizer",
     "megahal-keywords",
-    "markov-chain",
+    "megahal-markov",
     "ngram-trie",
     "symbol-dict",
     "symbol-core",
@@ -37,7 +37,7 @@ name = "megahal-tokenizer"
 name = "megahal-keywords"
 
 [[package]]
-name = "markov-chain"
+name = "megahal-markov"
 
 [[package]]
 name = "ngram-trie"

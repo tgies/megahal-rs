@@ -17,7 +17,7 @@
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-use markov_chain::{BidirectionalModel, ContextWindow};
+use megahal_markov::{BidirectionalModel, ContextWindow};
 use ngram_trie::Trie;
 use rand::Rng;
 use symbol_core::{ERROR_ID, FIN_ID, Symbol, SymbolId};
