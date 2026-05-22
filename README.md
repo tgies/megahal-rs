@@ -58,13 +58,21 @@ The brain file format is **not** compatible with the original C MegaHAL's
 
 ## Run the CLI
 
+If running from a local repository checkout, you can train on the bundled sample corpus:
 ```bash
-# Train on the bundled corpus and start chatting
 megahal --train data/megahal.trn --data-dir data
-
-# Reproducible output with a fixed seed and no persistence
-megahal --seed 42 --train data/megahal.trn --no-brain
 ```
+
+Otherwise, train on your own corpus text file:
+```bash
+megahal --train path/to/corpus.txt
+```
+
+To run with a fixed seed and disable brain file persistence:
+```bash
+megahal --seed 42 --train path/to/corpus.txt --no-brain
+```
+
 
 Type `quit` or `exit` to stop.
 
