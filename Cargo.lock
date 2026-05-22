@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "megahal"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bincode",
  "megahal-gen",
@@ -276,7 +276,7 @@ dependencies = [
 
 [[package]]
 name = "megahal-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -288,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "megahal-gen"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "megahal-markov",
  "ngram-trie",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "megahal-keywords"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "symbol-core",
  "symbol-dict",
@@ -307,7 +307,7 @@ dependencies = [
 
 [[package]]
 name = "megahal-markov"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ngram-trie",
  "serde",
@@ -318,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "megahal-tokenizer"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "memchr"
@@ -328,7 +328,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "ngram-trie"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -545,7 +545,7 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "symbol-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "symbol-dict"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
