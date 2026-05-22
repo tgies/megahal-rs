@@ -1,9 +1,12 @@
 # megahal-rs
 
 [![CI](https://github.com/tgies/megahal-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/tgies/megahal-rs/actions/workflows/ci.yml)
+[![Mutation Testing](https://github.com/tgies/megahal-rs/actions/workflows/mutants-full.yml/badge.svg?branch=main)](https://github.com/tgies/megahal-rs/actions/workflows/mutants-full.yml)
+[![Mutation Tested](https://img.shields.io/badge/mutation--tested-cargo--mutants-blueviolet?logo=rust)](https://mutants.rs/)
 [![Crates.io](https://img.shields.io/crates/v/megahal.svg)](https://crates.io/crates/megahal)
 [![Docs.rs](https://docs.rs/megahal/badge.svg)](https://docs.rs/megahal)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 
 A Rust reimplementation of [MegaHAL](https://en.wikipedia.org/wiki/MegaHAL),
 the 1998 bidirectional Markov chain chatbot by Jason Hutchens.
@@ -105,6 +108,15 @@ not stable and consumers should depend on the `megahal` facade.
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo llvm-cov --workspace      # line coverage (requires cargo-llvm-cov)
+```
+
+### Mutation Testing
+
+This repository uses [`cargo-mutants`](https://mutants.rs/) to verify test quality by introducing small modifications (mutants) to the source code and checking if the test suite catches them.
+
+To run mutation testing locally:
+```bash
+cargo mutants --workspace
 ```
 
 ## Credits
