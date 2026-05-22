@@ -30,7 +30,7 @@ megahal-tokenizer = { path = "crates/megahal-tokenizer", version = "0.2.0" }
 megahal-keywords = { path = "crates/megahal-keywords", version = "0.2.0" }
 megahal-gen = { path = "crates/megahal-gen", version = "0.2.0" }
 megahal = { path = "crates/megahal", version = "0.2.0" }
-rand = "0.9"
+rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 bincode = { version = "2", features = ["serde"] }
 thiserror = "2"

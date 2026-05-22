@@ -66,7 +66,7 @@ use std::path::Path;
 use megahal_gen::{capitalize, generate_reply};
 use megahal_markov::BidirectionalModel;
 use megahal_tokenizer::tokenize;
-use rand::Rng;
+use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 use symbol_core::Symbol;
 use thiserror::Error;
