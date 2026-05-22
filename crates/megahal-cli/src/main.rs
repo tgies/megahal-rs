@@ -73,8 +73,8 @@ fn main() -> io::Result<()> {
     let seed = args.seed.unwrap_or_else(|| {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
     });
 
     let rng = SmallRng::seed_from_u64(seed);
