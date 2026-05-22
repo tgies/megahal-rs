@@ -21,7 +21,8 @@ First release on crates.io. Renames the inner bidirectional Markov crate from `m
   the hardcoded "I don't know enough..." and "Hello!" messages.
 - `MegaHalError` for reader and writer errors.
 - `megahal-cli` crate with `cargo install megahal-cli` for the `megahal`
-  binary, extracted from the workspace root.
+  binary, extracted from the workspace root. `cargo binstall megahal-cli`
+  also works, pulling the prebuilt binary from the matching GitHub release.
 - Runnable examples under `crates/megahal/examples`: `chatbot` (stdin
   loop), `game_hud` (no-learn `generate` with a tight iteration budget),
   and `brain_persist` (save/load via reader/writer).
