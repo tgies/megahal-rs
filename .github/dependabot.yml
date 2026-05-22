@@ -9,7 +9,6 @@ updates:
       timezone: "America/Chicago"
     cooldown:
       default-days: 7
-    versioning-strategy: "increase-if-necessary"
     groups:
       cargo-dependencies:
         patterns:
