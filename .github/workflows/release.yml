@@ -8,7 +8,7 @@ on:
     inputs:
       tag:
         description: 'Tag to build (e.g., v0.1.0)'
-        required: false
+        required: true
         type: string
 
 env:
