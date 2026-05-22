@@ -36,6 +36,11 @@ First release on crates.io. Renames the inner bidirectional Markov crate from `m
 - Expanded the `megahal` crate-level rustdoc with an API tour, concepts
   section, brain-file format note, and a recipe for shipping a
   pre-trained brain via `include_bytes!`.
+- Running `megahal` without `--brain` now defaults to persisting the brain
+  to the user's data directory instead of running with no persistence.
+- `MegaHal::train_from_file` now streams the file line-by-line, meaning
+  a mid-file UTF-8 decoding error leaves the model partially trained
+  instead of validating UTF-8 upfront.
 
 ### Fixed
 
