@@ -7,9 +7,3 @@ rules:
         # behavior is determined by rustup, not by which commit of the action
         # source is checked out.
         dtolnay/rust-toolchain: ref-pin
-  artipacked:
-    ignore:
-      # release-plz needs persisted credentials to push tags and version-bump
-      # branches. These jobs upload no artifacts, so the artipacked concern
-      # (credentials leaking via artifact upload) doesn't apply.
-      - release-plz.yml
