@@ -1,7 +1,10 @@
 name: Release-plz
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches:
       - main
 
@@ -13,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: ${{ github.repository_owner == 'tgies' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.repository_owner == 'tgies' }}
     concurrency:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
@@ -50,7 +53,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    if: ${{ github.repository_owner == 'tgies' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.repository_owner == 'tgies' }}
     concurrency:
       group: release-plz-pr-${{ github.ref }}
       cancel-in-progress: false

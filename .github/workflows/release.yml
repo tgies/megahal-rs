@@ -47,6 +47,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@fe6ede73c7f0a50412ec05994e2aa5a7bf635eac # v1.0.7
@@ -62,6 +63,10 @@ jobs:
           executable-name: megahal
           target: ${{ matrix.platform.target }}
           changes-file: ""
+          action-gh-release-parameters: |
+            {
+              "tag_name": "${{ inputs.tag || github.ref_name }}"
+            }
           extra-files: |
             README.md
             LICENSE
