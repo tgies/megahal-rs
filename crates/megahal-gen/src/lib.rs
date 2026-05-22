@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use megahal_markov::{BidirectionalModel, ContextWindow};
 use ngram_trie::Trie;
-use rand::Rng;
+use rand::{Rng, RngExt};
 use symbol_core::{ERROR_ID, FIN_ID, Symbol, SymbolId};
 use symbol_dict::SymbolDict;
 
