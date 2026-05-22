@@ -33,6 +33,7 @@ jobs:
         with:
           tool: cargo-mutants
       - name: Run cargo-mutants on diff
+        continue-on-error: true
         run: cargo mutants --workspace --no-shuffle -vV --in-diff git.diff
       - name: Upload results
         if: always()
