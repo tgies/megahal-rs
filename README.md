@@ -50,8 +50,8 @@ let reply: Option<String> = bot.generate("hello");
 ```
 
 The brain file format is not compatible with the original C MegaHAL's
-`.brn` files. See [`MegaHal::save_brain_to_writer`] and
-[`load_brain_from_reader`] for in-memory persistence without filesystem I/O.
+`.brn` files. See the `save_brain_to_writer` and `load_brain_from_reader`
+methods for in-memory persistence without filesystem I/O.
 
 ## Run the CLI
 
