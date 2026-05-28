@@ -71,6 +71,8 @@ use serde::{Deserialize, Serialize};
 use symbol_core::Symbol;
 use thiserror::Error;
 
+mod compat_v8;
+
 // Re-export types that consumers (like the CLI) need.
 pub use megahal_gen::GenerationLimit;
 pub use megahal_keywords::{KeywordConfig, SwapTable, extract_keywords};
@@ -178,6 +180,15 @@ pub enum MegaHalError {
     /// Bincode encoding or decoding failed.
     #[error("brain serialization failed: {0}")]
     Decode(String),
+
+    /// The input did not start with the expected `MegaHALv8` cookie.
+    #[error("not a MegaHALv8 brain file")]
+    BadV8Cookie,
+
+    /// The V8 brain file's dictionary exceeds the 65536-symbol limit imposed
+    /// by the 16-bit symbol ID space.
+    #[error("V8 brain dictionary too large: {0} entries (max 65536)")]
+    V8DictionaryTooLarge(usize),
 }
 
 impl From<MegaHalError> for io::Error {
@@ -186,7 +197,9 @@ impl From<MegaHalError> for io::Error {
             MegaHalError::Io(e) => e,
             MegaHalError::BadMagic
             | MegaHalError::UnsupportedVersion(_)
-            | MegaHalError::Decode(_) => {
+            | MegaHalError::Decode(_)
+            | MegaHalError::BadV8Cookie
+            | MegaHalError::V8DictionaryTooLarge(_) => {
                 io::Error::new(io::ErrorKind::InvalidData, err.to_string())
             }
         }
@@ -506,6 +519,59 @@ impl<R: Rng> MegaHal<R> {
                 bincode::error::DecodeError::Io { inner, .. } => MegaHalError::Io(inner),
                 other => MegaHalError::Decode(other.to_string()),
             })?;
+        self.model = model;
+        Ok(())
+    }
+
+    /// Load a brain from a C MegaHAL `MegaHALv8` file, replacing the current
+    /// model.
+    ///
+    /// The C `.brn` is self-contained: model order, both tries, and the
+    /// dictionary are all read from the file. Keyword config, greetings,
+    /// generation limits, and RNG are unaffected.
+    ///
+    /// Support is read-only; this crate's native [`save_brain`] format
+    /// (magic `MHALRUST`) remains the canonical persistence format. The
+    /// importer assumes a little-endian source file, which is every
+    /// commodity platform in practical use.
+    ///
+    /// [`save_brain`]: Self::save_brain
+    pub fn load_v8_brain(&mut self, path: &Path) -> Result<(), MegaHalError> {
+        let file = File::open(path)?;
+        self.load_v8_brain_from_reader(BufReader::new(file))
+    }
+
+    /// Load a C MegaHAL `MegaHALv8` brain from any reader, replacing the
+    /// current model.
+    ///
+    /// See [`load_v8_brain`](Self::load_v8_brain) for format and semantics.
+    ///
+    /// ```
+    /// use megahal::MegaHal;
+    /// use rand::{rngs::SmallRng, SeedableRng};
+    /// use std::io::Cursor;
+    ///
+    /// // Smallest possible valid V8 brain: cookie, order, empty forward
+    /// // root, empty backward root, dictionary with just the two sentinels.
+    /// let mut buf = Vec::new();
+    /// buf.extend_from_slice(b"MegaHALv8");
+    /// buf.push(5); // order
+    /// // forward root: symbol=0, usage=0, count=0, branch=0
+    /// buf.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    /// // backward root: same
+    /// buf.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    /// // dictionary: count=2, then "<ERROR>" and "<FIN>"
+    /// buf.extend_from_slice(&2u32.to_le_bytes());
+    /// buf.push(7);
+    /// buf.extend_from_slice(b"<ERROR>");
+    /// buf.push(5);
+    /// buf.extend_from_slice(b"<FIN>");
+    ///
+    /// let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(0));
+    /// hal.load_v8_brain_from_reader(Cursor::new(buf)).unwrap();
+    /// ```
+    pub fn load_v8_brain_from_reader<Rd: Read>(&mut self, reader: Rd) -> Result<(), MegaHalError> {
+        let model = compat_v8::parse_v8_brain(reader)?;
         self.model = model;
         Ok(())
     }

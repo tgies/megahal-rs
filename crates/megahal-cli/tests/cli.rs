@@ -263,6 +263,107 @@ fn brain_and_no_brain_conflict() {
 }
 
 // ---------------------------------------------------------------------------
+// `convert` subcommand: import C MegaHAL `MegaHALv8` brains
+// ---------------------------------------------------------------------------
+
+/// Build a minimal but well-formed `MegaHALv8` brain (cookie, order, two
+/// empty roots, dictionary with the two sentinels). Suitable for testing
+/// the conversion pipeline without needing a real C MegaHAL fixture.
+fn write_minimal_v8_brain(path: &Path) {
+    let mut buf = Vec::new();
+    buf.extend_from_slice(b"MegaHALv8");
+    buf.push(5); // order
+    // Forward root: symbol=0, usage=0, count=0, branch=0.
+    buf.extend_from_slice(&[0; 10]);
+    // Backward root: identical.
+    buf.extend_from_slice(&[0; 10]);
+    // Dictionary count = 2.
+    buf.extend_from_slice(&2u32.to_le_bytes());
+    // "<ERROR>"
+    buf.push(7);
+    buf.extend_from_slice(b"<ERROR>");
+    // "<FIN>"
+    buf.push(5);
+    buf.extend_from_slice(b"<FIN>");
+    std::fs::write(path, buf).unwrap();
+}
+
+#[test]
+fn convert_v8_brain_writes_native_format() {
+    let dir = std::env::temp_dir();
+    let source = dir.join("megahal_cli_convert_src.brn");
+    let dest = dir.join("megahal_cli_convert_dst.brn");
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&dest);
+
+    write_minimal_v8_brain(&source);
+
+    cargo_bin_cmd!("megahal")
+        .args(["convert", source.to_str().unwrap(), dest.to_str().unwrap()])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Loading V8 brain"))
+        .stderr(predicate::str::contains("Writing converted brain"));
+
+    let written = std::fs::read(&dest).unwrap();
+    assert!(
+        written.starts_with(b"MHALRUST"),
+        "converted brain should start with MHALRUST magic"
+    );
+
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[test]
+fn convert_missing_source_fails() {
+    cargo_bin_cmd!("megahal")
+        .args(["convert", "/nonexistent/megahal.brn", "/tmp/out.brn"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn convert_rejects_non_v8_input() {
+    let dir = std::env::temp_dir();
+    let source = dir.join("megahal_cli_convert_bad.brn");
+    let dest = dir.join("megahal_cli_convert_bad_out.brn");
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&dest);
+
+    std::fs::write(&source, b"NotaBrainAtAll").unwrap();
+
+    cargo_bin_cmd!("megahal")
+        .args(["convert", source.to_str().unwrap(), dest.to_str().unwrap()])
+        .assert()
+        .failure();
+    assert!(!dest.exists(), "no output should be written on failure");
+
+    let _ = std::fs::remove_file(&source);
+}
+
+#[test]
+fn convert_does_not_start_chat_loop() {
+    let dir = std::env::temp_dir();
+    let source = dir.join("megahal_cli_convert_quiet_src.brn");
+    let dest = dir.join("megahal_cli_convert_quiet_dst.brn");
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&dest);
+
+    write_minimal_v8_brain(&source);
+
+    // No stdin needed; the subcommand should exit without prompting.
+    cargo_bin_cmd!("megahal")
+        .args(["convert", source.to_str().unwrap(), dest.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&dest);
+}
+
+// ---------------------------------------------------------------------------
 // Deterministic output with --seed
 // ---------------------------------------------------------------------------
 
