@@ -24,8 +24,12 @@ impl NodeRef {
     }
 
     /// Create from a usize index.
+    ///
+    /// Public for use by format importers that need to assemble a trie's child
+    /// references before the underlying node arena is fully populated. Most
+    /// callers should construct trees via [`Trie::add_child`] instead.
     #[inline]
-    fn from_usize(index: usize) -> Self {
+    pub fn from_usize(index: usize) -> Self {
         NodeRef(index as u32)
     }
 }
@@ -60,6 +64,22 @@ impl TrieNode {
             usage: 0,
             count: 0,
             children: Vec::new(),
+        }
+    }
+
+    /// Construct a node from raw field values.
+    ///
+    /// Intended for format importers (e.g. loading C MegaHAL `.brn` files)
+    /// that need to materialize a node with exact field values bypassing the
+    /// usage/count accounting performed by [`Trie::add_child`]. `children`
+    /// must be sorted by the [`SymbolId`] of the referenced child nodes; the
+    /// invariant is checked by [`Trie::from_raw_nodes`] in debug builds.
+    pub fn from_raw(symbol: SymbolId, usage: u32, count: u16, children: Vec<NodeRef>) -> Self {
+        TrieNode {
+            symbol,
+            usage,
+            count,
+            children,
         }
     }
 }
@@ -99,6 +119,43 @@ impl Trie {
     pub fn new() -> Self {
         let root = TrieNode::new(ERROR_ID);
         Trie { nodes: vec![root] }
+    }
+
+    /// Construct a trie from a pre-built node arena.
+    ///
+    /// Intended for format importers that build the node arena directly (e.g.
+    /// loading C MegaHAL `.brn` files). The first element of `nodes` is treated
+    /// as the root. In debug builds, this checks that:
+    ///
+    /// * `nodes` is non-empty,
+    /// * every [`NodeRef`] in any node's `children` is in-bounds, and
+    /// * each node's children are sorted by the [`SymbolId`] of the referenced
+    ///   child node (the invariant relied upon by [`Self::find_child`]).
+    ///
+    /// Callers must uphold these invariants in release builds.
+    pub fn from_raw_nodes(nodes: Vec<TrieNode>) -> Self {
+        debug_assert!(!nodes.is_empty(), "from_raw_nodes requires at least a root");
+        if cfg!(debug_assertions) {
+            for (idx, node) in nodes.iter().enumerate() {
+                let mut prev: Option<SymbolId> = None;
+                for child_ref in &node.children {
+                    let child_idx = child_ref.as_usize();
+                    debug_assert!(
+                        child_idx < nodes.len(),
+                        "node {idx} references out-of-bounds child {child_idx}"
+                    );
+                    let child_symbol = nodes[child_idx].symbol;
+                    if let Some(prev_symbol) = prev {
+                        debug_assert!(
+                            prev_symbol < child_symbol,
+                            "node {idx} children are not strictly sorted by SymbolId"
+                        );
+                    }
+                    prev = Some(child_symbol);
+                }
+            }
+        }
+        Trie { nodes }
     }
 
     /// Get a reference to the root node.

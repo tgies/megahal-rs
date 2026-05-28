@@ -5,7 +5,7 @@
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use megahal::{GenerationLimit, KeywordConfig, MegaHal, SwapTable, load_swap_file, load_word_list};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
@@ -47,6 +47,24 @@ struct Args {
     /// Maximum generation iterations (0 = no limit).
     #[arg(long, default_value_t = 0)]
     max_iterations: usize,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Convert a C MegaHAL `MegaHALv8` brain to this crate's native format.
+    ///
+    /// Reads the source `.brn` (C MegaHAL format, self-contained: cookie +
+    /// model order + both tries + embedded dictionary) and writes the result
+    /// in this crate's `MHALRUST` format. Does not start the chat loop.
+    Convert {
+        /// Path to a C MegaHAL `.brn` file (input).
+        source: PathBuf,
+        /// Path to write the converted brain (output, `MHALRUST` format).
+        dest: PathBuf,
+    },
 }
 
 /// Default brain location: `$XDG_DATA_HOME/megahal/megahal.brn` on Linux,
@@ -69,6 +87,12 @@ fn resolve_brain_path(args: &Args) -> Option<PathBuf> {
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
+
+    if let Some(command) = args.command {
+        return match command {
+            Commands::Convert { source, dest } => run_convert(&source, &dest),
+        };
+    }
 
     let seed = args.seed.unwrap_or_else(|| {
         std::time::SystemTime::now()
@@ -171,5 +195,31 @@ fn ensure_parent_dir(path: &Path) -> io::Result<()> {
     {
         std::fs::create_dir_all(parent)?;
     }
+    Ok(())
+}
+
+/// Convert a C MegaHAL `MegaHALv8` brain to this crate's `MHALRUST` format.
+///
+/// The output order is taken from the source file; the in-memory engine is
+/// instantiated with a placeholder order which is overwritten by the V8
+/// loader. PRNG seed and generation limits are unused because no replies are
+/// generated.
+fn run_convert(source: &Path, dest: &Path) -> io::Result<()> {
+    eprintln!("Loading V8 brain from {}...", source.display());
+    let mut hal = MegaHal::new(5, SmallRng::seed_from_u64(0));
+    hal.load_v8_brain(source)?;
+    let model = hal.model();
+    eprintln!(
+        "Loaded: order={}, dictionary={}, forward_nodes={}, backward_nodes={}",
+        model.order,
+        model.dictionary.len(),
+        model.forward.len(),
+        model.backward.len(),
+    );
+
+    ensure_parent_dir(dest)?;
+    eprintln!("Writing converted brain to {}...", dest.display());
+    hal.save_brain(dest)?;
+    eprintln!("Done.");
     Ok(())
 }
