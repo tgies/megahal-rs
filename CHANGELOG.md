@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/tgies/megahal-rs/compare/v0.2.0...v0.3.0) - 2026-05-28
+
+### Added
+
+- add C MegaHAL v8 .brn import ([#3](https://github.com/tgies/megahal-rs/pull/3))
+
+### Fixed
+
+- compatibility with rand 0.10.1
+
 ## [0.2.0]
 
 First release on crates.io. Renames the inner bidirectional Markov crate from `markov-chain` to `megahal-markov` to avoid a name conflict, exposes new APIs in the facade, and fixes four algorithm bugs relative to the C reference.
