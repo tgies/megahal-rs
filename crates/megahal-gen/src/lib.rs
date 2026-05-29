@@ -54,6 +54,9 @@ impl Default for GenerationLimit {
 /// is preserved so that `seed` scans keywords in the same order as C's
 /// `make_keywords` dictionary (`megahal.c:2273-2342`).  A `HashSet` is built
 /// internally for the O(1) membership checks in `babble` and `evaluate_reply`.
+///
+/// C's loop is a `do/while` (`megahal.c:2228-2240`): it always generates and
+/// evaluates at least one keyword-seeded candidate before checking the limit.
 pub fn generate_reply<S, R>(
     model: &BidirectionalModel<S>,
     input_tokens: &[S],
@@ -84,8 +87,19 @@ where
     let start = Instant::now();
     let mut iterations: usize = 0;
 
+    // C's loop is do/while: generate first, check limit after.
     loop {
-        // Check limits.
+        let candidate = generate_one_reply(model, keywords, &keywords_set, aux_set, rng);
+        let surprise = evaluate_reply(model, &candidate, &keywords_set);
+
+        if surprise > max_surprise && !tokens_equal(&candidate, input_tokens) {
+            max_surprise = surprise;
+            best = candidate;
+        }
+
+        iterations += 1;
+
+        // Check limits after generating (matching C's do/while).
         match limit {
             GenerationLimit::Timeout(d) => {
                 if start.elapsed() >= *d {
@@ -106,16 +120,6 @@ where
                 }
             }
         }
-
-        let candidate = generate_one_reply(model, keywords, &keywords_set, aux_set, rng);
-        let surprise = evaluate_reply(model, &candidate, &keywords_set);
-
-        if surprise > max_surprise && !tokens_equal(&candidate, input_tokens) {
-            max_surprise = surprise;
-            best = candidate;
-        }
-
-        iterations += 1;
     }
 
     best
@@ -633,13 +637,7 @@ mod tests {
     #[test]
     fn seed_visits_keywords_in_input_order() {
         // Train a model that knows ZEBRA and APPLE.
-        let model = trained_model(
-            2,
-            &[
-                &["ZEBRA", " ", "SAT"],
-                &["APPLE", " ", "RAN"],
-            ],
-        );
+        let model = trained_model(2, &[&["ZEBRA", " ", "SAT"], &["APPLE", " ", "RAN"]]);
         // ZEBRA > APPLE alphabetically, so if seed sorted we would pick APPLE
         // first on many RNG seeds.  With input order [ZEBRA, APPLE], a start
         // index of 0 must land on ZEBRA first.
@@ -667,15 +665,22 @@ mod tests {
             let start_idx = rng_peek.random_range(0usize..2);
             let result = seed(&model, &kws, &aux, &mut rng);
             if start_idx == 0 {
-                assert_eq!(result, zebra_id,
-                    "seed={seed_val}: start==0 should pick kws[0]=ZEBRA (input order), not APPLE (sorted order)");
+                assert_eq!(
+                    result, zebra_id,
+                    "seed={seed_val}: start==0 should pick kws[0]=ZEBRA (input order), not APPLE (sorted order)"
+                );
                 found_start_zero = true;
             } else {
-                assert_eq!(result, apple_id,
-                    "seed={seed_val}: start==1 should pick kws[1]=APPLE");
+                assert_eq!(
+                    result, apple_id,
+                    "seed={seed_val}: start==1 should pick kws[1]=APPLE"
+                );
             }
         }
-        assert!(found_start_zero, "no RNG seed produced start index 0 in 200 tries");
+        assert!(
+            found_start_zero,
+            "no RNG seed produced start index 0 in 200 tries"
+        );
     }
 
     // --- evaluate_reply tests ---
@@ -798,17 +803,29 @@ mod tests {
         assert_eq!(build(), build());
     }
 
+    // Iterations(0) still generates one keyword-seeded candidate (C do/while).
     #[test]
-    fn generate_reply_zero_iterations_returns_baseline() {
-        let model = trained_model(2, &[&["THE", " ", "CAT", " ", "SAT"]]);
+    fn generate_reply_iterations_zero_still_evaluates_one_candidate() {
+        let model = trained_model(
+            2,
+            &[
+                &["THE", " ", "CAT", " ", "SAT"],
+                &["THE", " ", "DOG", " ", "RAN"],
+            ],
+        );
         let kws = vec![ts("CAT")];
         let aux = HashSet::new();
         let limit = GenerationLimit::Iterations(0);
         let mut rng = make_rng(42);
-        // With 0 iterations, only the baseline (no-keyword) reply is generated.
-        // Should return without hanging.
+        // C's do/while always runs the body once before checking the bound.
+        // Iterations(0) means the limit check fires after iteration 1, so
+        // exactly one keyword-seeded candidate is generated and evaluated.
+        // The previous code checked the limit first and skipped generation.
         let reply = generate_reply(&model, &[], &kws, &aux, &limit, &mut rng);
-        let _ = reply; // just verify it completes
+        assert!(
+            !reply.is_empty(),
+            "Iterations(0) must still generate one keyword-seeded candidate per C do/while"
+        );
     }
 
     #[test]
