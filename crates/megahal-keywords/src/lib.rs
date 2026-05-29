@@ -62,15 +62,19 @@ pub struct KeywordConfig {
 ///
 /// `make_symbol` constructs a `Symbol` from a string.
 ///
-/// Returns the keyword set as uppercase `String` values (matching the model's
-/// internal representation).
+/// Returns keywords in first-occurrence input order, deduplicated.  The C
+/// reference builds the keyword dictionary with `add_word` in input order
+/// (`make_keywords`, megahal.c:2273-2342), and `seed()` scans that same
+/// dictionary from a random index.  Preserving input order here ensures the
+/// seed scan visits keywords in the same distribution as C.
 pub fn extract_keywords<S: Symbol + AsRef<[u8]>>(
     tokens: &[S],
     dict: &SymbolDict<S>,
     config: &KeywordConfig,
     make_symbol: impl Fn(&str) -> S,
-) -> HashSet<String> {
-    let mut keywords = HashSet::new();
+) -> Vec<String> {
+    let mut keywords: Vec<String> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
 
     // Collect all swap-applied candidates for the two-pass algorithm.
     let candidates: Vec<Vec<String>> = tokens
@@ -87,7 +91,9 @@ pub fn extract_keywords<S: Symbol + AsRef<[u8]>>(
             if !is_keyword_eligible(candidate, dict, config, false, &make_symbol) {
                 continue;
             }
-            keywords.insert(candidate.clone());
+            if seen.insert(candidate.clone()) {
+                keywords.push(candidate.clone());
+            }
         }
     }
 
@@ -98,7 +104,9 @@ pub fn extract_keywords<S: Symbol + AsRef<[u8]>>(
                 if !is_keyword_eligible(candidate, dict, config, true, &make_symbol) {
                     continue;
                 }
-                keywords.insert(candidate.clone());
+                if seen.insert(candidate.clone()) {
+                    keywords.push(candidate.clone());
+                }
             }
         }
     }
@@ -238,6 +246,10 @@ mod tests {
         assert!(config.swap.pairs.is_empty());
     }
 
+    fn has(kws: &[String], word: &str) -> bool {
+        kws.iter().any(|s| s == word)
+    }
+
     // --- extract_keywords tests ---
 
     #[test]
@@ -246,8 +258,8 @@ mod tests {
         let config = KeywordConfig::default();
         let tokens = vec![sym("HELLO"), sym(" "), sym("UNKNOWN")];
         let kws = extract_keywords(&tokens, &dict, &config, sym);
-        assert!(kws.contains("HELLO"));
-        assert!(!kws.contains("UNKNOWN"));
+        assert!(has(&kws, "HELLO"));
+        assert!(!has(&kws, "UNKNOWN"));
     }
 
     #[test]
@@ -256,9 +268,9 @@ mod tests {
         let config = KeywordConfig::default();
         let tokens = vec![sym("HELLO"), sym(" "), sym(".")];
         let kws = extract_keywords(&tokens, &dict, &config, sym);
-        assert!(kws.contains("HELLO"));
-        assert!(!kws.contains(" "));
-        assert!(!kws.contains("."));
+        assert!(has(&kws, "HELLO"));
+        assert!(!has(&kws, " "));
+        assert!(!has(&kws, "."));
     }
 
     #[test]
@@ -268,8 +280,8 @@ mod tests {
         config.banned.insert("THE".into());
         let tokens = vec![sym("THE"), sym("CAT")];
         let kws = extract_keywords(&tokens, &dict, &config, sym);
-        assert!(!kws.contains("THE"));
-        assert!(kws.contains("CAT"));
+        assert!(!has(&kws, "THE"));
+        assert!(has(&kws, "CAT"));
     }
 
     #[test]
@@ -281,8 +293,8 @@ mod tests {
         let kws = extract_keywords(&tokens, &dict, &config, sym);
         // Primary pass gets CAT (not banned, not aux).
         // Auxiliary pass then adds MY (because primary found at least one).
-        assert!(kws.contains("CAT"));
-        assert!(kws.contains("MY"));
+        assert!(has(&kws, "CAT"));
+        assert!(has(&kws, "MY"));
     }
 
     #[test]
@@ -308,9 +320,9 @@ mod tests {
         // Token "I" swaps to "YOU" (which IS in dict). "CAT" is unchanged.
         let tokens = vec![sym("I"), sym(" "), sym("CAT")];
         let kws = extract_keywords(&tokens, &dict, &config, sym);
-        assert!(kws.contains("YOU"));
-        assert!(kws.contains("CAT"));
-        assert!(!kws.contains("I"));
+        assert!(has(&kws, "YOU"));
+        assert!(has(&kws, "CAT"));
+        assert!(!has(&kws, "I"));
     }
 
     #[test]
@@ -325,8 +337,8 @@ mod tests {
         let tokens = vec![sym("I"), sym(" "), sym("CAT")];
         let kws = extract_keywords(&tokens, &dict, &config, sym);
         // "I" swaps to "YOU", but "YOU" is not in dict → skipped.
-        assert!(!kws.contains("YOU"));
-        assert!(kws.contains("CAT"));
+        assert!(!has(&kws, "YOU"));
+        assert!(has(&kws, "CAT"));
     }
 
     #[test]
@@ -348,6 +360,32 @@ mod tests {
         let tokens = vec![sym("THE"), sym("A"), sym("IS")];
         let kws = extract_keywords(&tokens, &dict, &config, sym);
         assert!(kws.is_empty());
+    }
+
+    // Input order is preserved; duplicates are dropped (first occurrence wins).
+    #[test]
+    fn extract_preserves_input_order_not_sorted() {
+        // ZEBRA < APPLE alphabetically (Z > A) but appears first in input.
+        let dict = dict_with(&["ZEBRA", "APPLE", "MANGO"]);
+        let config = KeywordConfig::default();
+        let tokens = vec![sym("ZEBRA"), sym("APPLE"), sym("MANGO")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        // Must preserve input order, not sort.
+        assert_eq!(kws, vec!["ZEBRA", "APPLE", "MANGO"]);
+        // Sorted order would be APPLE, MANGO, ZEBRA — verify we differ from that.
+        let mut sorted = kws.clone();
+        sorted.sort();
+        assert_ne!(kws, sorted);
+    }
+
+    #[test]
+    fn extract_deduplicates_keeping_first_occurrence() {
+        let dict = dict_with(&["CAT", "DOG"]);
+        let config = KeywordConfig::default();
+        // CAT appears twice; only the first occurrence should be kept.
+        let tokens = vec![sym("CAT"), sym("DOG"), sym("CAT")];
+        let kws = extract_keywords(&tokens, &dict, &config, sym);
+        assert_eq!(kws, vec!["CAT", "DOG"]);
     }
 
     // --- word_in_dict tests ---

@@ -297,14 +297,14 @@ impl<R: Rng> MegaHal<R> {
         // Step 2: Learn (before generating; matches original behavior).
         self.model.learn(&tokens);
 
-        // Step 3: Extract keywords.
+        // Step 3: Extract keywords (ordered, for faithful seed scan).
         let keywords = extract_keywords(
             &tokens,
             &self.model.dictionary,
             &self.keyword_config,
             MegaHalSymbol::new,
         );
-        let keyword_symbols: HashSet<MegaHalSymbol> =
+        let keyword_symbols: Vec<MegaHalSymbol> =
             keywords.iter().map(|s| MegaHalSymbol::new(s)).collect();
 
         // Step 4: Generate reply.
@@ -345,7 +345,7 @@ impl<R: Rng> MegaHal<R> {
             &self.keyword_config,
             MegaHalSymbol::new,
         );
-        let keyword_symbols: HashSet<MegaHalSymbol> =
+        let keyword_symbols: Vec<MegaHalSymbol> =
             keywords.iter().map(|s| MegaHalSymbol::new(s)).collect();
 
         let reply_symbols = generate_reply(
@@ -376,8 +376,7 @@ impl<R: Rng> MegaHal<R> {
         let idx = self.rng.random_range(0..self.greetings.len());
         let greeting = self.greetings[idx].clone();
 
-        let mut keywords = HashSet::new();
-        keywords.insert(MegaHalSymbol::new(&greeting));
+        let keywords = vec![MegaHalSymbol::new(&greeting)];
 
         let reply_symbols = generate_reply(
             &self.model,
