@@ -45,9 +45,11 @@ fn snapshot_hal(seed: u64) -> MegaHal<SmallRng> {
 fn snapshot_respond_dogs() {
     let mut hal = snapshot_hal(42);
     let reply = hal.respond("tell me about the dogs");
+    // Updated: extract_keywords now returns keywords in input order (issue #4),
+    // changing the seed distribution to match C's make_keywords/seed behavior.
     assert_eq!(
         reply,
-        "Dogs are loyal and friendly dogs share the forest together."
+        "Dogs are loyal and friendly dogs share the forest with deer and birds."
     );
 }
 
@@ -55,9 +57,10 @@ fn snapshot_respond_dogs() {
 fn snapshot_respond_fox() {
     let mut hal = snapshot_hal(42);
     let reply = hal.respond("what is a fox");
+    // Updated: see snapshot_respond_dogs.
     assert_eq!(
         reply,
-        "A quick dog and a slow fox both chase birds in the forest near the edge of the forest."
+        "A quick brown fox and the lazy dog sleeps in the sun while the fox runs."
     );
 }
 
@@ -65,7 +68,11 @@ fn snapshot_respond_fox() {
 fn snapshot_respond_forest() {
     let mut hal = snapshot_hal(42);
     let reply = hal.respond("describe the forest");
-    assert_eq!(reply, "The fox jumps over the forest together.");
+    // Updated: see snapshot_respond_dogs.
+    assert_eq!(
+        reply,
+        "The forest is full of foxes and deer live in the sun while their humans work nearby."
+    );
 }
 
 #[test]

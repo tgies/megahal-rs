@@ -49,10 +49,15 @@ impl Default for GenerationLimit {
 /// 1. Generate a baseline reply with empty keywords.
 /// 2. Repeatedly generate candidates with keywords, scoring each by surprise.
 /// 3. Return the highest-scoring candidate that differs from the input.
+///
+/// `keywords` is the ordered keyword list from `extract_keywords`; input order
+/// is preserved so that `seed` scans keywords in the same order as C's
+/// `make_keywords` dictionary (`megahal.c:2273-2342`).  A `HashSet` is built
+/// internally for the O(1) membership checks in `babble` and `evaluate_reply`.
 pub fn generate_reply<S, R>(
     model: &BidirectionalModel<S>,
     input_tokens: &[S],
-    keywords: &HashSet<S>,
+    keywords: &[S],
     aux_set: &HashSet<S>,
     limit: &GenerationLimit,
     rng: &mut R,
@@ -61,19 +66,23 @@ where
     S: Symbol + AsRef<[u8]>,
     R: Rng,
 {
-    let empty_keywords = HashSet::new();
+    // Build a HashSet from the ordered keywords for O(1) membership checks.
+    let keywords_set: HashSet<S> = keywords.iter().cloned().collect();
+
+    let empty_keywords: &[S] = &[];
+    let empty_keywords_set: HashSet<S> = HashSet::new();
     let empty_aux = HashSet::new();
 
     // Baseline reply (no keyword bias). Per C's `dissimilar()` check
     // (megahal.c:2215-2218), drop the baseline when it equals the input.
-    let mut best = generate_one_reply(model, &empty_keywords, &empty_aux, rng);
+    let mut best = generate_one_reply(model, empty_keywords, &empty_keywords_set, &empty_aux, rng);
     if tokens_equal(&best, input_tokens) {
         best = Vec::new();
     }
 
     let mut max_surprise: f64 = -1.0;
     let start = Instant::now();
-    let mut iterations = 0;
+    let mut iterations: usize = 0;
 
     loop {
         // Check limits.
@@ -98,8 +107,8 @@ where
             }
         }
 
-        let candidate = generate_one_reply(model, keywords, aux_set, rng);
-        let surprise = evaluate_reply(model, &candidate, keywords);
+        let candidate = generate_one_reply(model, keywords, &keywords_set, aux_set, rng);
+        let surprise = evaluate_reply(model, &candidate, &keywords_set);
 
         if surprise > max_surprise && !tokens_equal(&candidate, input_tokens) {
             max_surprise = surprise;
@@ -117,7 +126,8 @@ where
 /// MEGAHAL_SPEC.md Section 7.2.
 fn generate_one_reply<S, R>(
     model: &BidirectionalModel<S>,
-    keywords: &HashSet<S>,
+    keywords: &[S],
+    keywords_set: &HashSet<S>,
     aux_set: &HashSet<S>,
     rng: &mut R,
 ) -> Vec<S>
@@ -142,7 +152,7 @@ where
                 &model.forward,
                 &ctx,
                 &model.dictionary,
-                keywords,
+                keywords_set,
                 aux_set,
                 &reply,
                 &mut used_key,
@@ -174,7 +184,7 @@ where
             &model.backward,
             &ctx,
             &model.dictionary,
-            keywords,
+            keywords_set,
             aux_set,
             &reply,
             &mut used_key,
@@ -193,9 +203,15 @@ where
 /// Select a seed symbol for forward generation.
 ///
 /// MEGAHAL_SPEC.md Section 7.2.1.
+///
+/// `keywords` is the ordered slice from `extract_keywords`, preserving the
+/// input order C's `make_keywords` builds (`megahal.c:2273-2342`).  The scan
+/// starts at a random index and wraps around, matching C's `seed()`
+/// (`megahal.c:2694-2706`).  The `.sort()` that was here before introduced a
+/// different distribution because sorted order differs from input order.
 fn seed<S, R>(
     model: &BidirectionalModel<S>,
-    keywords: &HashSet<S>,
+    keywords: &[S],
     aux_set: &HashSet<S>,
     rng: &mut R,
 ) -> SymbolId
@@ -210,15 +226,13 @@ where
         return ERROR_ID;
     }
 
-    // If keywords exist, try to find a non-auxiliary keyword as seed.
+    // If keywords exist, scan from a random start index in input order.
     if !keywords.is_empty() {
-        let mut keyword_vec: Vec<&S> = keywords.iter().collect();
-        keyword_vec.sort();
-        let start = rng.random_range(0..keyword_vec.len());
+        let start = rng.random_range(0..keywords.len());
 
-        for offset in 0..keyword_vec.len() {
-            let idx = (start + offset) % keyword_vec.len();
-            let kw = keyword_vec[idx];
+        for offset in 0..keywords.len() {
+            let idx = (start + offset) % keywords.len();
+            let kw = &keywords[idx];
 
             // Must exist in dictionary and not be auxiliary.
             if let Some(id) = model.dictionary.find(kw)
@@ -573,8 +587,7 @@ mod tests {
                 &["THE", " ", "DOG", " ", "RAN"],
             ],
         );
-        let mut kws = HashSet::new();
-        kws.insert(ts("CAT"));
+        let kws = vec![ts("CAT")];
         let aux = HashSet::new();
         let mut rng = make_rng(42);
         let id = seed(&model, &kws, &aux, &mut rng);
@@ -585,8 +598,7 @@ mod tests {
     #[test]
     fn seed_skips_aux_keyword() {
         let model = trained_model(2, &[&["THE", " ", "MY", " ", "CAT"]]);
-        let mut kws = HashSet::new();
-        kws.insert(ts("MY"));
+        let kws = vec![ts("MY")];
         let mut aux = HashSet::new();
         aux.insert(ts("MY"));
         let mut rng = make_rng(42);
@@ -599,7 +611,7 @@ mod tests {
     #[test]
     fn seed_with_empty_keywords_picks_random() {
         let model = trained_model(2, &[&["THE", " ", "CAT"]]);
-        let kws = HashSet::new();
+        let kws: Vec<TSym> = vec![];
         let aux = HashSet::new();
         let mut rng = make_rng(42);
         let id = seed(&model, &kws, &aux, &mut rng);
@@ -610,11 +622,60 @@ mod tests {
     #[test]
     fn seed_returns_error_on_empty_model() {
         let model: BidirectionalModel<TSym> = BidirectionalModel::new(2);
-        let kws = HashSet::new();
+        let kws: Vec<TSym> = vec![];
         let aux = HashSet::new();
         let mut rng = make_rng(42);
         let id = seed(&model, &kws, &aux, &mut rng);
         assert_eq!(id, ERROR_ID);
+    }
+
+    // seed visits keywords in input order, not sorted order.
+    #[test]
+    fn seed_visits_keywords_in_input_order() {
+        // Train a model that knows ZEBRA and APPLE.
+        let model = trained_model(
+            2,
+            &[
+                &["ZEBRA", " ", "SAT"],
+                &["APPLE", " ", "RAN"],
+            ],
+        );
+        // ZEBRA > APPLE alphabetically, so if seed sorted we would pick APPLE
+        // first on many RNG seeds.  With input order [ZEBRA, APPLE], a start
+        // index of 0 must land on ZEBRA first.
+        let kws = vec![ts("ZEBRA"), ts("APPLE")];
+        let aux: HashSet<TSym> = HashSet::new();
+
+        // Force start index 0 by using a seeded RNG that produces 0 for
+        // random_range(0..2).  Iterate a few seeds to find one that gives 0.
+        // Both ZEBRA and APPLE are valid seeds (neither is aux), so whichever
+        // index 0 points to must be returned.  We assert that at start=0 the
+        // result is ZEBRA (input-order index 0), not APPLE (sorted index 0).
+        let zebra_id = model.dictionary.find(&ts("ZEBRA")).unwrap();
+        let apple_id = model.dictionary.find(&ts("APPLE")).unwrap();
+
+        // With a fresh SmallRng(0), random_range(0..2) gives a deterministic
+        // value; we just need to verify that the result is consistent with
+        // input order (index 0 = ZEBRA), not sorted order (index 0 = APPLE).
+        // Try many RNG seeds: for any seed that yields start==0, result must
+        // be ZEBRA; for start==1, result must be APPLE.
+        let mut found_start_zero = false;
+        for seed_val in 0u64..200 {
+            let mut rng = make_rng(seed_val);
+            // Peek what start index would be chosen (same call as seed()).
+            let mut rng_peek = make_rng(seed_val);
+            let start_idx = rng_peek.random_range(0usize..2);
+            let result = seed(&model, &kws, &aux, &mut rng);
+            if start_idx == 0 {
+                assert_eq!(result, zebra_id,
+                    "seed={seed_val}: start==0 should pick kws[0]=ZEBRA (input order), not APPLE (sorted order)");
+                found_start_zero = true;
+            } else {
+                assert_eq!(result, apple_id,
+                    "seed={seed_val}: start==1 should pick kws[1]=APPLE");
+            }
+        }
+        assert!(found_start_zero, "no RNG seed produced start index 0 in 200 tries");
     }
 
     // --- evaluate_reply tests ---
@@ -692,7 +753,7 @@ mod tests {
     #[test]
     fn generate_reply_empty_model() {
         let model: BidirectionalModel<TSym> = BidirectionalModel::new(2);
-        let kws = HashSet::new();
+        let kws: Vec<TSym> = vec![];
         let aux = HashSet::new();
         let limit = GenerationLimit::Iterations(10);
         let mut rng = make_rng(42);
@@ -710,8 +771,7 @@ mod tests {
                 &["A", " ", "BIG", " ", "CAT"],
             ],
         );
-        let mut kws = HashSet::new();
-        kws.insert(ts("CAT"));
+        let kws = vec![ts("CAT")];
         let aux = HashSet::new();
         let limit = GenerationLimit::Iterations(10);
         let mut rng = make_rng(42);
@@ -729,8 +789,7 @@ mod tests {
                     &["THE", " ", "DOG", " ", "RAN"],
                 ],
             );
-            let mut kws = HashSet::new();
-            kws.insert(ts("CAT"));
+            let kws = vec![ts("CAT")];
             let aux = HashSet::new();
             let limit = GenerationLimit::Iterations(50);
             let mut rng = make_rng(42);
@@ -742,8 +801,7 @@ mod tests {
     #[test]
     fn generate_reply_zero_iterations_returns_baseline() {
         let model = trained_model(2, &[&["THE", " ", "CAT", " ", "SAT"]]);
-        let mut kws = HashSet::new();
-        kws.insert(ts("CAT"));
+        let kws = vec![ts("CAT")];
         let aux = HashSet::new();
         let limit = GenerationLimit::Iterations(0);
         let mut rng = make_rng(42);
@@ -763,8 +821,7 @@ mod tests {
                 &["A", " ", "BIG", " ", "CAT"],
             ],
         );
-        let mut kws = HashSet::new();
-        kws.insert(ts("CAT"));
+        let kws = vec![ts("CAT")];
         let aux = HashSet::new();
         let limit = GenerationLimit::Timeout(Duration::from_millis(50));
         let mut rng = make_rng(42);
@@ -781,8 +838,7 @@ mod tests {
                 &["THE", " ", "DOG", " ", "RAN"],
             ],
         );
-        let mut kws = HashSet::new();
-        kws.insert(ts("CAT"));
+        let kws = vec![ts("CAT")];
         let aux = HashSet::new();
         let limit = GenerationLimit::Both {
             timeout: Duration::from_millis(50),
@@ -802,9 +858,7 @@ mod tests {
                 &["YOUR", " ", "DOG", " ", "RAN"],
             ],
         );
-        let mut kws = HashSet::new();
-        kws.insert(ts("CAT"));
-        kws.insert(ts("MY"));
+        let kws = vec![ts("CAT"), ts("MY")];
         let mut aux = HashSet::new();
         aux.insert(ts("MY"));
         let limit = GenerationLimit::Iterations(20);
@@ -826,7 +880,7 @@ mod tests {
             ],
         );
         let input = vec![ts("A"), ts(" "), ts("B"), ts(" "), ts("C")];
-        let kws = HashSet::new();
+        let kws: Vec<TSym> = vec![];
         let aux = HashSet::new();
         let limit = GenerationLimit::Iterations(50);
         let mut rng = make_rng(42);
