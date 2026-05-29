@@ -98,11 +98,10 @@ pub(crate) fn parse_v8_brain<R: Read>(
     for _ in 0..dict_count {
         let len = cursor.read_u8()? as usize;
         let bytes = cursor.read_bytes(len)?;
-        // MegaHalSymbol::new uppercases on construction; the C dictionary's
-        // symbols are already uppercase by C MegaHAL convention.
-        let word = std::str::from_utf8(bytes)
-            .map_err(|e| MegaHalError::Decode(format!("invalid UTF-8 in dictionary: {e}")))?;
-        dictionary.intern(MegaHalSymbol::new(word));
+        // C load_word reads raw bytes with no encoding validation
+        // (megahal.c:1384). Intern as raw bytes, applying ASCII uppercasing
+        // to match C's convention (toupper in C locale, megahal.c:965-970).
+        dictionary.intern(MegaHalSymbol::from_raw_bytes(bytes));
     }
 
     Ok(BidirectionalModel {
@@ -450,5 +449,40 @@ mod tests {
             false,
         );
         assert!(matches!(detect_usage_width(&buf), UsageWidth::Four));
+    }
+
+    /// Build a V8 brain stream with raw-byte dictionary entries (no UTF-8 req).
+    fn build_v8_raw_dict(order: u8, dict_entries: &[&[u8]]) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(V8_COOKIE);
+        out.push(order);
+        // Two empty roots.
+        write_node(&mut out, &empty_root(), false);
+        write_node(&mut out, &empty_root(), false);
+        out.extend_from_slice(&(dict_entries.len() as u32).to_le_bytes());
+        for entry in dict_entries {
+            assert!(entry.len() <= u8::MAX as usize);
+            out.push(entry.len() as u8);
+            out.extend_from_slice(entry);
+        }
+        out
+    }
+
+    // Dictionary words with non-UTF-8 bytes (e.g. 0xFF) must load without error
+    // and the stored bytes must be preserved (with ASCII uppercasing applied).
+    #[test]
+    fn non_utf8_dictionary_entry_loads_and_preserves_raw_bytes() {
+        // 0xFF is not valid UTF-8; the old code called from_utf8 and rejected it.
+        let non_utf8_word: &[u8] = &[b'W', b'O', b'R', b'D', 0xFF];
+        let buf = build_v8_raw_dict(5, &[b"<ERROR>", b"<FIN>", non_utf8_word]);
+        let model = parse_v8_brain(&buf[..]).expect("must load non-UTF-8 bytes without error");
+        assert_eq!(model.dictionary.len(), 3);
+
+        // The word with 0xFF should be in the dictionary.  Resolve entry at
+        // index 2 (IDs: 0=<ERROR>, 1=<FIN>, 2=the non-UTF-8 word).
+        use symbol_core::SymbolId;
+        let sym = model.dictionary.resolve(SymbolId::new(2));
+        // ASCII bytes uppercased, 0xFF unchanged.
+        assert_eq!(sym.as_bytes(), &[b'W', b'O', b'R', b'D', 0xFF]);
     }
 }

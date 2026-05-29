@@ -86,9 +86,18 @@ pub use megahal_keywords::{KeywordConfig, SwapTable, extract_keywords};
 pub struct MegaHalSymbol(Vec<u8>);
 
 impl MegaHalSymbol {
-    /// Create a new symbol from a string (stored as uppercase bytes).
+    /// Create a new symbol from a string (stored as ASCII-uppercased bytes).
     pub fn new(s: &str) -> Self {
-        MegaHalSymbol(s.to_uppercase().into_bytes())
+        MegaHalSymbol(s.to_ascii_uppercase().into_bytes())
+    }
+
+    /// Create a symbol from raw bytes, applying ASCII uppercasing.
+    ///
+    /// Used by the v8 brain loader (`compat_v8`) to intern dictionary words
+    /// without requiring UTF-8 validity.  Bytes >= 0x80 are stored unchanged,
+    /// matching C's `toupper` in the C locale (`megahal.c:965-970`).
+    pub(crate) fn from_raw_bytes(bytes: &[u8]) -> Self {
+        MegaHalSymbol(bytes.iter().map(|b| b.to_ascii_uppercase()).collect())
     }
 
     /// Get the raw bytes.
