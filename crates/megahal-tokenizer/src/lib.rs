@@ -16,6 +16,8 @@
 /// 3. Ensures the token sequence ends with sentence-terminal punctuation
 ///    (`!`, `.`, or `?`).
 ///
+/// Empty input yields an empty sequence (no tokens).
+///
 /// # Examples
 ///
 /// ```
@@ -26,7 +28,7 @@
 /// ```
 pub fn tokenize(input: &str) -> Vec<String> {
     if input.is_empty() {
-        return vec![".".to_string()];
+        return Vec::new();
     }
 
     let upper = input.to_uppercase();
@@ -129,8 +131,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_input_returns_single_period() {
-        assert_eq!(tokenize(""), vec!["."]);
+    fn empty_input_returns_no_tokens() {
+        assert!(tokenize("").is_empty());
     }
 
     #[test]
@@ -174,8 +176,10 @@ mod tests {
 
     #[test]
     fn empty_input() {
+        // C make_words returns immediately on empty input (megahal.c:2053):
+        // zero tokens, no synthetic terminal token.
         let tokens = tokenize("");
-        assert_eq!(tokens, vec!["."]);
+        assert!(tokens.is_empty());
     }
 
     #[test]
