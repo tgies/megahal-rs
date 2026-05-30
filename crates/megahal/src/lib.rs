@@ -87,6 +87,11 @@ pub struct MegaHalSymbol(Vec<u8>);
 
 impl MegaHalSymbol {
     /// Create a new symbol from a string (stored as ASCII-uppercased bytes).
+    ///
+    /// Uses `to_ascii_uppercase` to match `upper()` (used for `Hash`/`Ord`),
+    /// so that stored bytes and comparison bytes agree.  C uppercases once,
+    /// byte-wise with `toupper` in the C locale (`megahal.c:965-970`), leaving
+    /// bytes >= 0x80 unchanged; `to_ascii_uppercase` has the same semantics.
     pub fn new(s: &str) -> Self {
         MegaHalSymbol(s.to_ascii_uppercase().into_bytes())
     }
@@ -684,6 +689,37 @@ mod tests {
     fn megahal_symbol_to_string_lossy() {
         let sym = MegaHalSymbol::new("Hello");
         assert_eq!(sym.to_string_lossy(), "HELLO");
+    }
+
+    // new() stored bytes must equal upper() bytes so Hash/Ord agree with storage.
+    #[test]
+    fn megahal_symbol_new_and_upper_agree_on_ascii() {
+        let sym = MegaHalSymbol::new("hello");
+        assert_eq!(
+            sym.as_bytes(),
+            sym.upper().as_slice(),
+            "stored bytes must equal upper() bytes for ASCII input"
+        );
+        assert_eq!(sym.as_bytes(), b"HELLO");
+    }
+
+    // For non-ASCII bytes, new() must NOT change bytes >= 0x80, matching C's
+    // toupper in the C locale (megahal.c:965-970).  to_ascii_uppercase leaves
+    // bytes >= 0x80 unchanged, so stored bytes always equal upper() bytes.
+    #[test]
+    fn megahal_symbol_non_ascii_stored_bytes_equal_upper() {
+        // U+00E9 LATIN SMALL LETTER E WITH ACUTE: UTF-8 [0xC3, 0xA9].
+        // to_uppercase would give U+00C9 [0xC3, 0x89], which differs byte-wise.
+        // to_ascii_uppercase leaves both bytes unchanged.
+        let input = "\u{00e9}";
+        let sym = MegaHalSymbol::new(input);
+        assert_eq!(
+            sym.as_bytes(),
+            sym.upper().as_slice(),
+            "stored bytes must equal upper() bytes for non-ASCII input"
+        );
+        // Bytes should be the original UTF-8 bytes, unchanged.
+        assert_eq!(sym.as_bytes(), input.as_bytes());
     }
 
     // --- Engine lifecycle tests ---
