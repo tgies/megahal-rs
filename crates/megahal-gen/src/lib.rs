@@ -226,11 +226,9 @@ where
     let root = model.forward.root();
     let children = model.forward.children(root);
 
-    if children.is_empty() {
-        return ERROR_ID;
-    }
-
-    // If keywords exist, scan from a random start index in input order.
+    // Keywords are scanned first: a keyword that is in the dictionary and not
+    // auxiliary seeds the reply even when the forward root has no children,
+    // matching C seed() (megahal.c:2697-2706).
     if !keywords.is_empty() {
         let start = rng.random_range(0..keywords.len());
 
@@ -238,7 +236,6 @@ where
             let idx = (start + offset) % keywords.len();
             let kw = &keywords[idx];
 
-            // Must exist in dictionary and not be auxiliary.
             if let Some(id) = model.dictionary.find(kw)
                 && !aux_set.contains(kw)
             {
@@ -247,7 +244,10 @@ where
         }
     }
 
-    // Default: pick a random child of the forward root.
+    // Default: a random child of the forward root, or ERROR if it has none.
+    if children.is_empty() {
+        return ERROR_ID;
+    }
     let idx = rng.random_range(0..children.len());
     model.forward.node(children[idx]).symbol
 }
@@ -681,6 +681,22 @@ mod tests {
             found_start_zero,
             "no RNG seed produced start index 0 in 200 tries"
         );
+    }
+
+    #[test]
+    fn seed_returns_keyword_when_forward_root_has_no_children() {
+        // A keyword in the dictionary seeds the reply even when the forward
+        // root is childless, matching C seed() (megahal.c:2697-2706). This
+        // state is reachable only via a degenerate loaded brain, since learning
+        // couples dictionary and trie population.
+        let mut model: BidirectionalModel<TSym> = BidirectionalModel::new(2);
+        let hello_id = model.dictionary.intern(ts("HELLO"));
+        assert!(model.forward.children(model.forward.root()).is_empty());
+
+        let kws = vec![ts("HELLO")];
+        let aux: HashSet<TSym> = HashSet::new();
+        let mut rng = make_rng(0);
+        assert_eq!(seed(&model, &kws, &aux, &mut rng), hello_id);
     }
 
     // --- evaluate_reply tests ---
