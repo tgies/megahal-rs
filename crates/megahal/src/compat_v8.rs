@@ -472,7 +472,7 @@ mod tests {
     // and the stored bytes must be preserved (with ASCII uppercasing applied).
     #[test]
     fn non_utf8_dictionary_entry_loads_and_preserves_raw_bytes() {
-        // 0xFF is not valid UTF-8; the old code called from_utf8 and rejected it.
+        // 0xFF is not valid UTF-8, so the loader must intern it as raw bytes.
         let non_utf8_word: &[u8] = &[b'W', b'O', b'R', b'D', 0xFF];
         let buf = build_v8_raw_dict(5, &[b"<ERROR>", b"<FIN>", non_utf8_word]);
         let model = parse_v8_brain(&buf[..]).expect("must load non-UTF-8 bytes without error");
