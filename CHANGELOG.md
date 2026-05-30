@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/tgies/megahal-rs/compare/v0.3.0...v0.3.1) - 2026-05-30
+
+### Fixed
+
+- *(symbol)* align MegaHalSymbol::new with upper() using to_ascii_uppercase ([#9](https://github.com/tgies/megahal-rs/pull/9))
+- *(gen)* preserve input order for keyword/seed scan to match C reference
+- *(compat_v8)* load dictionary words as raw bytes, no UTF-8 validation ([#10](https://github.com/tgies/megahal-rs/pull/10))
+- *(gen)* seed a keyword even when the forward root is childless
+- *(gen)* restructure generation loop to do/while, matching C reference
+- *(tokenizer)* return zero tokens for empty input, matching C
+
+### Other
+
+- describe loader behavior instead of the prior code in the v8 raw-bytes test
+
 ## [0.3.0](https://github.com/tgies/megahal-rs/compare/v0.2.0...v0.3.0) - 2026-05-28
 
 ### Added
