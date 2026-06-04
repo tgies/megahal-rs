@@ -134,8 +134,6 @@ described in his 1998 paper "Introducing MegaHAL" and in the source of
 
 ## References
 
-## References
-
 - Hutchens, Jason L.; Alder, Michael D. (1998), ["Introducing MegaHAL"][introducing-megahal], NeMLaP3/CoNLL98 Workshop on Human-Computer Conversation, ACL, pp. 271--274.
 - Hutchens, Jason L. (1997), ["How to Pass the Turing Test by Cheating"][turing-test-cheating], Technical Report TR97-05, Department of E&E Engineering, University of Western Australia.
 - Hutchens, Jason L., ["How MegaHAL Works"][how-megahal-works], MegaHAL homepage.
