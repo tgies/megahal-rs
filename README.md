@@ -12,17 +12,25 @@ A Rust reimplementation of [MegaHAL](https://en.wikipedia.org/wiki/MegaHAL),
 the 1998 bidirectional Markov chain chatbot by Jason Hutchens.
 
 Faithful to the original C algorithm (tokenization, keyword extraction,
-bidirectional generation, surprise evaluation), organized as a modular Cargo
-workspace.
+bidirectional generation, surprise evaluation).
+
+Provided as a CLI and as a library.
 
 ## Install
 
-```bash
-# Add dependencies
-cargo add megahal rand
+### CLI
 
+```bash
 # CLI (interactive chatbot at the terminal, installs as `megahal`)
 cargo install megahal-cli
+megahal
+```
+
+### As a library
+
+```bash
+# Note: We use a pluggable RNG rather than wiring one in
+cargo add megahal rand
 ```
 
 ## Library usage
@@ -73,7 +81,6 @@ To run with a fixed seed and disable brain file persistence:
 megahal --seed 42 --train path/to/corpus.txt --no-brain
 ```
 
-
 Type `quit` or `exit` to stop.
 
 The CLI persists its model between runs at
@@ -84,17 +91,17 @@ on macOS, `%APPDATA%\megahal\megahal.brn` on Windows). Override the path with
 ## Architecture
 
 ```
-megahal-cli          thin CLI wrapper (clap)
-  └── megahal        facade: MegaHalSymbol, config, brain persistence
-        ├── megahal-gen        reply generation, babble, surprise scoring
+megahal-cli                        thin CLI wrapper
+  └── megahal                      facade: MegaHalSymbol, config, brain persistence
+        ├── megahal-gen            reply generation, babble, surprise scoring
         │   ├── megahal-keywords   keyword extraction, swap/ban/aux tables
         │   │   └── megahal-markov ── ngram-trie ── symbol-core
         │   └── megahal-markov
-        ├── megahal-tokenizer  text tokenization (MegaHAL boundary rules)
-        └── megahal-markov     bidirectional model + context window
-              ├── ngram-trie   arena-based n-gram frequency trie
+        ├── megahal-tokenizer      text tokenization (MegaHAL boundary rules)
+        └── megahal-markov         bidirectional model + context window
+              ├── ngram-trie       arena-based n-gram frequency trie
               │   └── symbol-core  Symbol trait + SymbolId
-              └── symbol-dict  generic interning dictionary
+              └── symbol-dict      generic interning dictionary
                   └── symbol-core
 ```
 
@@ -124,6 +131,20 @@ cargo mutants --workspace
 Original 1998 C implementation by Jason Hutchens. The MegaHAL algorithm is
 described in his 1998 paper "Introducing MegaHAL" and in the source of
 [MegaHALv8](https://github.com/kranzky/megahal).
+
+## References
+
+## References
+
+- Hutchens, Jason L.; Alder, Michael D. (1998), ["Introducing MegaHAL"][introducing-megahal], NeMLaP3/CoNLL98 Workshop on Human-Computer Conversation, ACL, pp. 271--274.
+- Hutchens, Jason L. (1997), ["How to Pass the Turing Test by Cheating"][turing-test-cheating], Technical Report TR97-05, Department of E&E Engineering, University of Western Australia.
+- Hutchens, Jason L., ["How MegaHAL Works"][how-megahal-works], MegaHAL homepage.
+- Hutchens, Jason L., [Original MegaHAL C source code][megahal-github], GitHub.
+
+[introducing-megahal]: https://aclanthology.org/W98-1233.pdf
+[turing-test-cheating]: https://courses.cs.umbc.edu/471/papers/hutchens.pdf
+[how-megahal-works]: https://megahal.sourceforge.net/How.html
+[megahal-github]: https://github.com/pteichman/megahal
 
 ## License
 
