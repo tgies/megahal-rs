@@ -14,7 +14,7 @@ members = [
 
 [workspace.package]
 edition = "2024"
-version = "0.3.1"
+version = "0.3.2"
 rust-version = "1.88"
 license = "MIT"
 authors = ["Tony Gies <tgies@tgies.net>"]
@@ -22,14 +22,14 @@ repository = "https://github.com/tgies/megahal-rs"
 publish = true
 
 [workspace.dependencies]
-symbol-core = { path = "crates/symbol-core", version = "0.3.1" }
-ngram-trie = { path = "crates/ngram-trie", version = "0.3.1" }
-symbol-dict = { path = "crates/symbol-dict", version = "0.3.1" }
-megahal-markov = { path = "crates/megahal-markov", version = "0.3.1" }
-megahal-tokenizer = { path = "crates/megahal-tokenizer", version = "0.3.1" }
-megahal-keywords = { path = "crates/megahal-keywords", version = "0.3.1" }
-megahal-gen = { path = "crates/megahal-gen", version = "0.3.1" }
-megahal = { path = "crates/megahal", version = "0.3.1" }
+symbol-core = { path = "crates/symbol-core", version = "0.3.2" }
+ngram-trie = { path = "crates/ngram-trie", version = "0.3.2" }
+symbol-dict = { path = "crates/symbol-dict", version = "0.3.2" }
+megahal-markov = { path = "crates/megahal-markov", version = "0.3.2" }
+megahal-tokenizer = { path = "crates/megahal-tokenizer", version = "0.3.2" }
+megahal-keywords = { path = "crates/megahal-keywords", version = "0.3.2" }
+megahal-gen = { path = "crates/megahal-gen", version = "0.3.2" }
+megahal = { path = "crates/megahal", version = "0.3.2" }
 rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 bincode = { version = "2", features = ["serde"] }
